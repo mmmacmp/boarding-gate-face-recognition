@@ -1,0 +1,35 @@
+# Biometric data, keys and local artefacts: never commit (CLAUDE.md "Biometric data")
+data/
+*.p12
+*.jks
+*.npy
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Smoke-test workspace (bundled sample image, models, raw results)
+smoke/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Java
+target/
+
+# Node
+node_modules/
+dist/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+Thumbs.db
+
+# Model files (downloaded, licences vary)
+*.onnx
+model-service/models/
