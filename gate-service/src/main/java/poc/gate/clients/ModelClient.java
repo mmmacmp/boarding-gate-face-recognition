@@ -21,10 +21,15 @@ public class ModelClient {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record EmbedResponse(String modelId, int dim, List<Face> faces) {
+    public record EmbedResponse(String modelId, int dim, List<Face> faces, Integer smallFaces) {
 
         public int faceCount() {
             return faces.size();
+        }
+
+        /** No face in the gate zone, but faces too small to use: capture feedback ("step closer"). */
+        public boolean onlySmallFaces() {
+            return faces.isEmpty() && smallFaces != null && smallFaces > 0;
         }
 
         /** The model-service only returns an embedding when there is exactly one face. */

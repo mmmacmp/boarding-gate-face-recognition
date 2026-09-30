@@ -20,6 +20,15 @@ COMPOSE = ["docker", "compose", "-f", str(ROOT / "ops" / "docker-compose.yml"), 
 RESET_SQL = "TRUNCATE flight, passenger_consent, gallery_entry, gate_event, outbox, audit_log"
 
 
+def reset_demo(mocks_url: str = "http://localhost:8002", model_url: str = "http://localhost:8001") -> None:
+    """Empty database, no injected faults, flights POC001 + POC002 seeded. Also used by the console's reset button
+    (python tools/demo_scenario.py --reset)."""
+    subprocess.run(COMPOSE + [RESET_SQL], capture_output=True, text=True, check=True)
+    httpx.post(f"{mocks_url}/admin/faults", json={}).raise_for_status()
+    httpx.post(f"{model_url}/admin/faults", json={}).raise_for_status()
+    subprocess.run([sys.executable, str(ROOT / "tools" / "seed.py")], check=True, stdout=subprocess.DEVNULL)
+
+
 class Demo:
     def __init__(self, gate_url: str, mocks_url: str, data: Path):
         self.gate = httpx.Client(base_url=gate_url, timeout=10)
@@ -51,9 +60,7 @@ class Demo:
 
     def run(self) -> None:
         self.scene("0. Reset: empty database, no faults, seed flights POC001 + POC002")
-        print("  " + subprocess.run(COMPOSE + [RESET_SQL], capture_output=True, text=True, check=True).stdout.strip())
-        self.mocks.post("/admin/faults", json={}).raise_for_status()
-        subprocess.run([sys.executable, str(ROOT / "tools" / "seed.py")], check=True, stdout=subprocess.DEVNULL)
+        reset_demo(str(self.mocks.base_url).rstrip("/"))
         print("  " + self.gallery_size())
 
         self.scene("1. Only this flight's consented gallery; a hard capture goes to a human")
@@ -109,3 +116,8 @@ class Demo:
 
 def run_demo(gate_url: str, mocks_url: str, data: Path) -> None:
     Demo(gate_url, mocks_url, data).run()
+
+
+if __name__ == "__main__" and sys.argv[1:] == ["--reset"]:
+    reset_demo()  # the console's "reset demo" button calls this
+    print("reset done: empty database, no faults, POC001 + POC002 seeded")

@@ -4,6 +4,7 @@ package poc.gate.decision;
 public enum ReasonCode {
     MATCHED,
     NO_FACE,
+    LOW_QUALITY,
     MULTI_FACE,
     NO_MATCH,
     AMBIGUOUS,

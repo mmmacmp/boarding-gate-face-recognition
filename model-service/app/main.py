@@ -3,6 +3,7 @@
 It never sees identities, never stores or logs images or embeddings. The gate-service owns every decision.
 Run: uvicorn app.main:app --port 8001   (switches: DEVICE=cuda|cpu, MODEL=r50|sface, CPU_THREADS=4, MIN_FACE_PX=80)
 """
+import asyncio
 import logging
 import threading
 import time
@@ -15,7 +16,7 @@ from fastapi.concurrency import run_in_threadpool
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from .models import load_backend
-from .schemas import EmbedResponse, FaceOut, HealthResponse
+from .schemas import EmbedResponse, FaceOut, Faults, HealthResponse
 from .settings import Settings, load_settings
 
 log = logging.getLogger("model-service")
@@ -27,7 +28,7 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
     Tests can inject a fake backend to exercise the HTTP contract without model
     files. Production uses the module-level app and loads models during startup.
     """
-    state = {"backend": backend}
+    state = {"backend": backend, "faults": Faults()}
     lock = threading.Lock()  # detector objects are not thread-safe; one gate = one passenger at a time anyway
 
     @asynccontextmanager
@@ -61,7 +62,8 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
             t0 = time.perf_counter()
             # Faces narrower than MIN_FACE_PX are people outside the gate zone: drop them before the one-face
             # rule, so they neither cause MULTI_FACE nor get reported or embedded.
-            faces = [f for f in b.detect(img) if f.bbox[2] - f.bbox[0] >= settings.min_face_px]
+            detected = b.detect(img)
+            faces = [f for f in detected if f.bbox[2] - f.bbox[0] >= settings.min_face_px]
             t1 = time.perf_counter()
             # Data minimisation: only compute a template when there is exactly one face.
             # With 0 or 2+ faces the gate goes to manual anyway, so bystanders' templates are never computed.
@@ -70,7 +72,7 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
         out = [FaceOut(bbox=f.bbox, det_score=f.det_score) for f in faces]
         if embedding is not None:
             out[0].embedding = embedding.tolist()
-        return EmbedResponse(model_id=b.model_id, dim=b.dim, faces=out,
+        return EmbedResponse(model_id=b.model_id, dim=b.dim, faces=out, small_faces=len(detected) - len(faces),
                              timings_ms={"detect": round((t1 - t0) * 1000, 2), "embed": round((t2 - t1) * 1000, 2)})
 
     @app.post("/v1/embed", response_model=EmbedResponse, response_model_exclude_none=True)
@@ -83,6 +85,11 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
         """
         # Raw image bytes in the body (image/jpeg or image/png). Kept in memory only, never written or logged.
         t0 = time.perf_counter()
+        faults = state["faults"]
+        if faults.down:
+            raise HTTPException(503, "model-service down (fault injection)")
+        if faults.latency_ms:
+            await asyncio.sleep(faults.latency_ms / 1000)
         data = await request.body()
         if not data:
             raise HTTPException(400, "empty body: send raw image bytes")
@@ -103,6 +110,15 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
         """Report the loaded backend's metadata; this does not run fresh inference."""
         b = state["backend"]
         return HealthResponse(status="ok", model_id=b.model_id, dim=b.dim, device=b.device, providers=b.providers)
+
+    @app.get("/admin/faults", response_model=Faults)
+    def get_faults() -> Faults:
+        return state["faults"]
+
+    @app.post("/admin/faults", response_model=Faults)
+    def set_faults(faults: Faults) -> Faults:
+        state["faults"] = faults
+        return faults
 
     return app
 

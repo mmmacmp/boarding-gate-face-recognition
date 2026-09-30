@@ -87,3 +87,18 @@ def test_metrics_endpoint_exposed():
     client, _ = client_with(1)
     client.post("/v1/embed", content=blank_image())
     assert "http_requests_total" in client.get("/metrics").text
+
+
+def test_small_faces_are_counted_for_capture_feedback():
+    backend = FakeBackend(widths=[40, 60])
+    client = TestClient(create_app(Settings(min_face_px=80), backend=backend))
+    body = client.post("/v1/embed", content=blank_image()).json()
+    assert body["faces"] == [] and body["small_faces"] == 2
+
+
+def test_down_fault_returns_503_until_cleared():
+    client, _ = client_with(1)
+    assert client.post("/admin/faults", json={"down": True}).json()["down"] is True
+    assert client.post("/v1/embed", content=blank_image()).status_code == 503
+    client.post("/admin/faults", json={})
+    assert client.post("/v1/embed", content=blank_image()).status_code == 200

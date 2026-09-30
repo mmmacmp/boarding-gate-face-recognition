@@ -136,6 +136,7 @@ spikes/ (only if the Day-1 checkpoint triggers)
 - Demo reset (a rebuild deliberately keeps boarded state): `docker compose -f ops/docker-compose.yml exec -T db psql -U poc -d gate -c "TRUNCATE flight, passenger_consent, gallery_entry, gate_event, outbox, audit_log"`
 - Seed and scenarios: `python tools/seed.py`, then `python tools/gate_sim.py --scenario demo` (`--twin-from-photo` reproduces the reference-quality finding)
 - Latency: `python tools/bench_latency.py --device cuda|cpu|cpu4`
+- Demo console (Step 6): `cd gate-console; npm install; npm run dev` → http://localhost:5173 (Vite proxies `/gate`, `/mocks`, `/model`; no CORS; `/demo/reset` runs `python tools/demo_scenario.py --reset`)
 
 ## Definition of done
 - Every row of the failure-mode table is green in tests.

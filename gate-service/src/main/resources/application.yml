@@ -17,7 +17,7 @@ spring:
     max-request-size: 6MB
 
 management:
-  endpoints.web.exposure.include: health,prometheus,circuitbreakers
+  endpoints.web.exposure.include: health,prometheus,circuitbreakers,circuitbreakerevents
   health.circuitbreakers.enabled: true
 
 # Circuit breakers (Resilience4j). Counting window of the last 10 calls; from 5 calls on, >= 50% failed or slow
@@ -34,6 +34,7 @@ resilience4j.circuitbreaker:
       wait-duration-in-open-state: 10s
       permitted-number-of-calls-in-half-open-state: 2
       register-health-indicator: true
+      event-consumer-buffer-size: 50       # recent events for /actuator/circuitbreakerevents (console timeline)
   instances:
     identity:
       base-config: default

@@ -103,3 +103,23 @@ line, delete or simplify it.
 | `GateMetrics.recordSearch` + `gate.gallery.search` timer | cost of "no plaintext cache" (unwrap DEK + DB read + decrypt + dot products); `publishPercentiles(0.5, 0.95)` | |
 | `application.yml` R50 threshold 0.44 | where it came from (`tools/score_analysis.py`), why it is still illustrative, the FNMR it costs | |
 | `pom.xml` Mockito `-javaagent` | `maven-dependency-plugin:properties`; `@{argLine}` keeps the JaCoCo agent | |
+
+## Step 6: demo console support
+
+### Java
+| Item | Concepts to cover | Your explanation |
+|---|---|---|
+| `StageTimings` | a mutable data holder with public fields (why not a record here); `@JsonNaming`; never stored | |
+| `GateEvent.timings` | `@Transient` = not a column; only present in the response of the request that made the decision | |
+| `GateDecisionService` stage timing | `try/finally` so a failed or timed-out stage still reports its time; `LOW_QUALITY` = only faces smaller than `MIN_FACE_PX` (a size proxy, not an image-quality model) | |
+| `GateController` `GET /v1/events`, `GET /v1/policy` | derived query `findTop20ByOrderByIdDesc`; returning a config record as JSON | |
+| `application.yml` `circuitbreakerevents` | Resilience4j's event buffer; why the console reads transitions from it instead of polling state | |
+
+### Console (React, for the walkthrough of the demo tool)
+| File | Concepts to cover | Your explanation |
+|---|---|---|
+| `vite.config.js` | dev-server proxy (why no CORS is needed); the dev-only `/demo/probe` allowlist and `/demo/reset` | |
+| `usePoll.js` | `useEffect` + cleanup (like cancelling an asyncio task); why loaders live outside components | |
+| `GatePanel.jsx`, `Webcam.jsx` | component state with `useState`; object URLs; `getUserMedia` + canvas capture; synthetic images never rendered | |
+| `DecisionBanner.jsx`, `reasons.js` | re-mount with `key` to replay the CSS animation; the one privacy rule `shownProfile` | |
+| `OpsPanel.jsx`, `BreakerTimeline.jsx`, `LatencyWaterfall.jsx`, `RecentEvents.jsx` | turning transition events into timeline segments; waterfall offsets | |

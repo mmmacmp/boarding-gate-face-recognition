@@ -57,9 +57,10 @@ public class GateDecisionService {
             return previous.get();
         }
         long start = System.nanoTime();
+        StageTimings timings = new StageTimings();
         Decision decision;
         try {
-            decision = decide(flightId, image);
+            decision = decide(flightId, image, timings);
         } catch (DependencyUnavailableException e) {
             decision = Decision.manual(e.reason());
         } catch (RuntimeException e) {
@@ -67,8 +68,11 @@ public class GateDecisionService {
             decision = Decision.manual(ReasonCode.INTERNAL_ERROR);
         }
         GateEvent event;
+        long dbStart = System.nanoTime();
         try {
             event = writer.record(idempotencyKey, gateId, flightId, decision);
+            timings.dbMs = StageTimings.since(dbStart);
+            event.setTimings(timings);
         } catch (DataIntegrityViolationException e) {
             // The same key arrived twice at the same moment: the unique constraint let the first insert win and
             // rolled this transaction back (including any board update), so return the winner's decision.
@@ -82,12 +86,21 @@ public class GateDecisionService {
         return event;
     }
 
-    private Decision decide(String flightId, byte[] image) {
+    private Decision decide(String flightId, byte[] image, StageTimings timings) {
         Flight flight = flights.findById(flightId).orElse(null);
         if (flight == null || flight.getStatus() != Flight.Status.BOARDING) {
             return Decision.manual(ReasonCode.GALLERY_UNAVAILABLE);
         }
-        ModelClient.EmbedResponse probe = model.embed(image); // the probe lives in memory only, for this call
+        long embedStart = System.nanoTime();
+        ModelClient.EmbedResponse probe;
+        try {
+            probe = model.embed(image); // the probe lives in memory only, for this call
+        } finally {
+            timings.embedMs = StageTimings.since(embedStart); // also when it failed: a timeout shows as a bar
+        }
+        if (probe.onlySmallFaces()) {
+            return Decision.manual(ReasonCode.LOW_QUALITY); // a size-based proxy, not an image-quality model
+        }
         if (!probe.modelId().equals(flight.getModelId())) {
             return Decision.manual(ReasonCode.MODEL_MISMATCH); // never compare templates from different models
         }
@@ -96,12 +109,20 @@ public class GateDecisionService {
             long start = System.nanoTime();
             top2 = gallery.searchTop2(flight, probe.modelId(), probe.embedding());
             metrics.recordSearch(Duration.ofNanos(System.nanoTime() - start));
+            timings.searchMs = StageTimings.since(start);
         }
         Decision decision = policy.decide(probe.faceCount(), probe.modelId(), top2);
-        if (decision.isBoard() && !identity.isValid(decision.profileId(), flightId)) {
-            return decision.toManual(ReasonCode.IDP_REJECTED);
+        if (!decision.isBoard()) {
+            return decision;
         }
-        return decision;
+        long identityStart = System.nanoTime();
+        boolean valid;
+        try {
+            valid = identity.isValid(decision.profileId(), flightId);
+        } finally {
+            timings.identityMs = StageTimings.since(identityStart);
+        }
+        return valid ? decision : decision.toManual(ReasonCode.IDP_REJECTED);
     }
 
     private static String round(Double score) {

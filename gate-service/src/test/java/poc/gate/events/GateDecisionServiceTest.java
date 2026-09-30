@@ -58,7 +58,7 @@ class GateDecisionServiceTest {
     }
 
     private static ModelClient.EmbedResponse oneFace() {
-        return new ModelClient.EmbedResponse(MODEL, 2, List.of(new ModelClient.Face(List.of(0d, 0d, 9d, 9d), 0.9, PROBE)));
+        return new ModelClient.EmbedResponse(MODEL, 2, List.of(new ModelClient.Face(List.of(0d, 0d, 9d, 9d), 0.9, PROBE)), 0);
     }
 
     private GateEvent handle() {
@@ -72,6 +72,21 @@ class GateDecisionServiceTest {
         assertThat(event.getReason()).isEqualTo(ReasonCode.MATCHED);
         assertThat(event.getProfileId()).isEqualTo("P001");
         assertThat(event.getTop1()).isEqualTo(0.60);
+    }
+
+    @Test
+    void happyPathReportsTheTimeOfEveryStage() {
+        StageTimings t = handle().getTimings();
+        assertThat(List.of(t.embedMs, t.searchMs, t.identityMs, t.dbMs)).doesNotContainNull();
+    }
+
+    @Test
+    void onlyFacesTooSmallIsLowQualityWithoutSearching() {
+        when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse(MODEL, 2, List.of(), 1));
+        GateEvent event = handle();
+        assertThat(event.getReason()).isEqualTo(ReasonCode.LOW_QUALITY);
+        assertThat(event.getTimings().searchMs).isNull(); // the search never ran
+        verify(gallery, never()).searchTop2(any(), anyString(), any());
     }
 
     @Test
@@ -105,7 +120,7 @@ class GateDecisionServiceTest {
 
     @Test
     void probeFromADifferentModelIsNeverCompared() {
-        when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse("sface-2021dec", 128, oneFace().faces()));
+        when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse("sface-2021dec", 128, oneFace().faces(), 0));
         assertThat(handle().getReason()).isEqualTo(ReasonCode.MODEL_MISMATCH);
         verify(gallery, never()).searchTop2(any(), anyString(), any());
     }
@@ -119,7 +134,7 @@ class GateDecisionServiceTest {
     @Test
     void twoFacesIsMultiFaceWithoutSearching() {
         ModelClient.Face face = oneFace().faces().get(0);
-        when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse(MODEL, 2, List.of(face, face)));
+        when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse(MODEL, 2, List.of(face, face), 0));
         assertThat(handle().getReason()).isEqualTo(ReasonCode.MULTI_FACE);
         verify(gallery, never()).searchTop2(any(), anyString(), any());
     }

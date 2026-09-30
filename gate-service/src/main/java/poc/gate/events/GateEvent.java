@@ -6,6 +6,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Transient;
 import java.time.Instant;
 import poc.gate.decision.Decision;
 import poc.gate.decision.ReasonCode;
@@ -28,6 +29,8 @@ public class GateEvent {
     private Double top1;
     private Double top2;
     private Instant createdAt;
+    @Transient // not a column: only lives in memory for the response of the request that created the event
+    private StageTimings timings;
 
     protected GateEvent() {
     }
@@ -74,5 +77,17 @@ public class GateEvent {
 
     public Double getTop2() {
         return top2;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public StageTimings getTimings() {
+        return timings;
+    }
+
+    void setTimings(StageTimings timings) {
+        this.timings = timings;
     }
 }

@@ -1,5 +1,5 @@
 """Response contract of POST /v1/embed. The gate-service depends on these field names."""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FaceOut(BaseModel):
@@ -16,7 +16,15 @@ class EmbedResponse(BaseModel):
     model_id: str                        # templates are only comparable within the same model_id
     dim: int
     faces: list[FaceOut]
+    small_faces: int = 0                 # faces ignored as narrower than MIN_FACE_PX (capture feedback: "step closer")
     timings_ms: dict[str, float]
+
+
+class Faults(BaseModel):
+    """Demo fault injection (the console's "model down" button). Not something a vendor SDK would expose."""
+
+    down: bool = False
+    latency_ms: int = Field(0, ge=0, le=30_000)
 
 
 class HealthResponse(BaseModel):

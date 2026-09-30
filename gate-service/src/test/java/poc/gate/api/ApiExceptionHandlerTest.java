@@ -14,7 +14,9 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import poc.gate.config.GateProperties;
 import poc.gate.events.GateDecisionService;
+import poc.gate.events.GateEventRepository;
 
 /** Failure-mode row "DB down": only the web layer is started (no DB), the service is a Mockito mock. */
 @WebMvcTest(GateController.class)
@@ -24,6 +26,10 @@ class ApiExceptionHandlerTest {
     private MockMvc mvc;
     @MockitoBean
     private GateDecisionService service;
+    @MockitoBean // GateController also serves recent events and the policy; not used by this test
+    private GateEventRepository events;
+    @MockitoBean
+    private GateProperties props;
 
     @Test
     void databaseDownReturns503WithAManualDecision() throws Exception {
