@@ -5,7 +5,7 @@
   scored 45/50 in the Phase 4 matrix.
 - Decision: the airline business logic (consent, gallery, decision, fallback, encryption, metrics) is a small Spring
   Boot 4.1.1 service; the models sit behind a stateless FastAPI service, a stand-in for a vendor SDK.
-- Guardrails: Spring MVC (no WebFlux), constructor injection, records, no Lombok, ~900 code lines (902 measured,
+- Guardrails: Spring MVC (no WebFlux), constructor injection, records, no Lombok, ~950 code lines (962 measured after the Step 6 console support,
   excluding blank/comment/import lines), every class listed in `docs/WALKTHROUGH.md`.
 - Checkpoint (17:30 Day 1): `DecisionPolicy` + `TemplateCrypto` tests green and one end-to-end BOARD via
   `tools/gate_sim.py` → passed; otherwise the gate-service would have been rebuilt in FastAPI behind the same contract.

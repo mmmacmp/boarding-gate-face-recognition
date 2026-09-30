@@ -4,6 +4,12 @@
 > external system here (identity provider, departure control) is a mock with a hypothetical API. Thresholds are
 > illustrative. No accuracy claims.
 
+![Demo console: a synthetic passenger boards after the identity-provider breaker went OPEN, HALF_OPEN and CLOSED again](docs/img/console.png)
+
+*The demo console (`gate-console/`) after a slow-identity-provider scene: the breaker timeline shows CLOSED → OPEN →
+HALF_OPEN → CLOSED, and the waterfall splits the last decision into embed, decrypt + search, identity check and DB
+write. Synthetic passengers are shown by id and score only; their images are never displayed.*
+
 ## 1. What this is
 
 A boarding gate that matches a passenger 1:N against **only that flight's consented gallery**, anchored in a mock
@@ -25,14 +31,42 @@ rises roughly 17x from 640k to 12M identities (see the research docs for sources
 
 ## 3. Architecture
 
+```mermaid
+flowchart LR
+    sim["gate_sim.py / demo console<br/>(browser, :5173)"] -- "POST /v1/gates/{gate}/events<br/>image, flight_id, Idempotency-Key" --> gate
+    subgraph gate["gate-service :8081 · Java 21, Spring Boot 4.1.1"]
+        policy["DecisionPolicy<br/>T, Δ, reason codes"]
+        crypto["TemplateCrypto<br/>AES-256-GCM, per-flight DEK"]
+    end
+    gate -- "RestClient 800 ms<br/>+ circuit breaker" --> model["model-service :8001<br/>FastAPI · InsightFace / OpenCV<br/>stateless, no identities"]
+    gate -- "RestClient 300 ms<br/>+ circuit breaker, no retry" --> idp["mock-idp :8002<br/>identity provider stand-in<br/>references, 1:1 verify, faults"]
+    gate -- "manifest" --> dcs["dcs-stub :8002"]
+    gate -- "JPA / Flyway" --> db[("PostgreSQL :5433<br/>flight · passenger_consent<br/>gallery_entry (ciphertext)<br/>gate_event · audit_log")]
+    kek["data/kek.p12<br/>KEK (KMS/HSM stand-in)"] -.-> crypto
+    gate -. "/actuator/prometheus<br/>/actuator/circuitbreakers" .-> ops["operations"]
 ```
-gate_sim.py ──POST /v1/gates/{gate}/events (multipart image, flight_id, Idempotency-Key)──▶ gate-service :8081
-gate-service (Java 21, Spring Boot 4.1.1)
-  ├─ RestClient 800 ms + @CircuitBreaker ──▶ model-service :8001 (Python/FastAPI, InsightFace; stateless, no identities)
-  ├─ RestClient 300 ms + @CircuitBreaker ──▶ mock-idp :8002 (identity provider stand-in: references, 1:1 verify, faults)
-  ├─ RestClient 2 s                      ──▶ dcs-stub :8002 (manifest)
-  ├─ JPA / Flyway ──▶ PostgreSQL :5433 (flight, passenger_consent, gallery_entry, gate_event, audit_log)
-  └─ Actuator: /actuator/health, /actuator/prometheus, /actuator/circuitbreakers
+
+**Gate-event sequence** (any exception or open breaker → `MANUAL` + reason):
+
+```mermaid
+sequenceDiagram
+    participant G as Gate (camera)
+    participant S as gate-service
+    participant M as model-service
+    participant D as PostgreSQL
+    participant I as mock-idp
+    G->>S: POST event (image, flight_id, Idempotency-Key)
+    S->>D: key seen before? flight BOARDING?
+    S->>M: embed(image) · 800 ms, breaker
+    M-->>S: model_id, faces[, embedding]
+    Note over S: 0 faces → NO_FACE · only small faces → LOW_QUALITY · 2+ → MULTI_FACE
+    S->>D: matchable rows: ACTIVE ⋈ consent ACTIVE, same model_id
+    Note over S: unwrap DEK, decrypt rows, cosine top-2 (in memory, per event)
+    Note over S: top1 < T → NO_MATCH · top1 − top2 < Δ → AMBIGUOUS
+    S->>I: verify(profile, flight) · 300 ms, breaker, no retry
+    I-->>S: VALID / INVALID
+    S->>D: one transaction: UPDATE … WHERE status='ACTIVE' (0 rows → ALREADY_BOARDED) + INSERT gate_event
+    S-->>G: decision, reason, scores, stage timings (profile only for BOARD)
 ```
 
 | Real | Mocked / stubbed |
@@ -40,7 +74,7 @@ gate-service (Java 21, Spring Boot 4.1.1)
 | Face detection + embeddings (SCRFD-10G + ArcFace R50, or YuNet + SFace) | Identity provider (`mock-idp`, hypothetical API) |
 | 1:N search, decision policy, consent filter | Departure control (`dcs-stub`) |
 | AES-256-GCM envelope encryption, per-flight keys, crypto-shredding | KMS/HSM (a local PKCS12 keystore holds the KEK) |
-| Circuit breakers, timeouts, idempotency, board-once update | Gate hardware (a CLI simulator) |
+| Circuit breakers, timeouts, idempotency, board-once update | Gate hardware (a CLI simulator and a browser console) |
 | Metrics, tests | Operational images: one consenting volunteer + synthetic faces |
 
 Details, sequence and contracts: [`docs/architecture.md`](docs/architecture.md). Decisions: [`docs/decisions/`](docs/decisions/).
@@ -48,7 +82,8 @@ Details, sequence and contracts: [`docs/architecture.md`](docs/architecture.md).
 ## 4. Gate decision policy
 
 1. Idempotency-Key seen before → the stored decision. 2. Flight not `BOARDING` → `GALLERY_UNAVAILABLE`.
-3. Embed: 0 faces → `NO_FACE`, 2+ → `MULTI_FACE` (faces < 80 px are ignored as background); model failure →
+3. Embed: 0 faces → `NO_FACE`, 2+ → `MULTI_FACE` (faces < 80 px are ignored as background; if *only* such small
+faces are present → `LOW_QUALITY`, "please step closer", a size proxy, not an image-quality model); model failure →
 `MODEL_UNAVAILABLE`; probe from another model than the gallery → `MODEL_MISMATCH`. 4. Search the flight's `ACTIVE`
 entries **joined with `ACTIVE` consent at query time**; top-1 and top-2 cosine. 5. `top1 < T` → `NO_MATCH`;
 `top1 − top2 < Δ` → `AMBIGUOUS`. 6. 1:1 confirm at the identity provider (300 ms, breaker, no retry): failure →
@@ -168,19 +203,29 @@ cd model-service; $env:DEVICE="cuda"; ..\.venv\Scripts\python -m uvicorn app.mai
 cd mocks; ..\.venv\Scripts\python -m uvicorn main:app --port 8002
 cd gate-service; $env:GATE_RETENTION_GRACE="10s"; $env:GATE_RETENTION_PURGE_INTERVAL="5s"; .\mvnw.cmd spring-boot:run   # :8081
 .\.venv\Scripts\python tools\gate_sim.py --scenario demo                  # resets the DB, seeds, runs the demo
+cd gate-console; npm install; npm run dev                                  # demo console on http://localhost:5173
 ```
+
+**Demo console** (`gate-console/`, React 19 + Vite 8, plain CSS): the gate panel sends demo captures (volunteer
+day/night photos, a simulated look-alike on POC002, a synthetic stranger, the next synthetic passenger) or a webcam
+capture, and shows a signage-style decision banner with the reason in plain English plus score bars against T and Δ.
+The operations panel shows gallery counts, the manual-fallback rate over the last 20 events, both breakers with a
+3-minute state timeline, the per-stage latency of the last decision, fault buttons (slow / down identity provider,
+model down), consent withdrawal, a "reset demo" button (the same reset as the demo script) and recent events. The
+Vite dev server proxies every call, so the services need no CORS. Identity is shown only for `BOARD`.
 
 Volunteer photos go in `data/volunteers/<id>/` (layout in `data/README-consent.md`, gitignored). The demo script and
 recording notes: [`docs/demo-script.md`](docs/demo-script.md).
 
 ## 11. Tests and coverage
 
-- gate-service: 35 unit tests (`mvnw test`, no DB) + 20 integration tests (`mvnw verify`, real Postgres `gate_test`,
-  WireMock for all HTTP dependencies). One test per failure-mode row. JaCoCo: **90% line, 90% branch**
+- gate-service: 37 unit tests (`mvnw test`, no DB) + 20 integration tests (`mvnw verify`, real Postgres `gate_test`,
+  WireMock for all HTTP dependencies). One test per failure-mode row. JaCoCo: **90.0% line, 88.6% branch**
   (`gate-service/target/site/jacoco`). `DecisionPolicy` and `TemplateCrypto` tests were written first.
-- model-service: 19 pytest tests (fake-backend contract tests + real-model tests; photo tests skip without `data/`).
+- model-service: 21 pytest tests (fake-backend contract tests + real-model tests; photo tests skip without `data/`).
 - mocks: 14 pytest tests.
-- Gap to "100% unit tests in CI": no CI pipeline; controllers are covered mainly through the end-to-end demo.
+- Gap to "100% unit tests in CI": no CI pipeline; controllers and the console endpoints (`/v1/events`,
+  `/v1/policy`) are covered mainly through the end-to-end demo; the console itself has no automated tests.
 
 ## 12. Models, data and licences
 
@@ -211,7 +256,9 @@ Explicit, not exhaustive:
 - **Operations:** single instance; no HA/DR, Kubernetes, or load test at an A380 boarding peak; no agreed SLOs or
   runbooks; no threat model or penetration test; the model-service serialises inference with one lock (one gate).
 - **Capture:** no multi-camera walk-through, tailgating control or accessibility handling (children, PRM, face
-  coverings).
+  coverings); "low quality" is only a face-size proxy, not an image-quality model (eDifFIQA / OFIQ).
+- **Console:** a local dev tool (Vite dev server, no authentication); its reset and fault controls must never exist in
+  a production gate UI.
 
 ## 14. What I'd ask and do next
 
