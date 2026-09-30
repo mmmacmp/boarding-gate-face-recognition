@@ -1,0 +1,45 @@
+server:
+  port: 8081                      # 8080 is taken by another local service on the dev machine
+
+spring:
+  application.name: gate-service
+  # Local secrets (KEK password) live in the gitignored data/ folder. Env var GATE_KEK_PASSWORD also works.
+  config.import: optional:file:../data/local-secrets.properties
+  datasource:
+    url: jdbc:postgresql://localhost:5433/gate
+    username: poc
+    password: poc                 # local docker-compose toy credentials
+  jpa:
+    open-in-view: false           # no lazy DB access from controllers: the DB work ends inside the service
+    hibernate.ddl-auto: validate  # Flyway owns the schema; Hibernate only checks the entities match it
+  jackson:
+    property-naming-strategy: SNAKE_CASE   # JSON uses flight_id etc., like the Python services
+  servlet.multipart:
+    max-file-size: 5MB
+    max-request-size: 6MB
+
+management:
+  endpoints.web.exposure.include: health,prometheus
+
+gate:
+  model-service:
+    url: http://localhost:8001
+    connect-timeout: 100ms
+    read-timeout: 800ms           # GPU; use 1500ms for CPU
+  identity:                       # mock-idp (identity provider stand-in)
+    url: http://localhost:8002
+    connect-timeout: 100ms
+    read-timeout: 300ms
+  dcs:                            # dcs-stub (manifest)
+    url: http://localhost:8002
+    connect-timeout: 100ms
+    read-timeout: 2s
+  policy:
+    # ILLUSTRATIVE placeholders, not calibrated. Brackets keep "_" and "-" in map keys.
+    thresholds:
+      "[r50-buffalo_l]": 0.35
+      "[sface-2021dec]": 0.363
+    margin: 0.10
+  kek:
+    path: ../data/kek.p12         # PKCS12 keystore, a stand-in for a KMS/HSM
+    password: ${GATE_KEK_PASSWORD:}

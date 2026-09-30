@@ -7,8 +7,10 @@ Flights:
 
 For every reference image: EXIF is stripped (decode + re-encode) before upload, and, if the model-service is
 reachable, the face is checked (exactly one face, width >= 150 px). Probes are checked too, for information.
-Resets the mocks first (profiles, manifests and injected faults).
+Resets the mocks first (profiles, manifests and injected faults). If the gate-service is reachable, it then records
+consent for every enrolled profile (never P900) and builds the gallery of each flight.
 Usage: python tools/seed.py [--mocks http://localhost:8002] [--model-service http://localhost:8001]
+                            [--gate-service http://localhost:8081]
 """
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -56,10 +58,26 @@ def put_manifest(mocks: httpx.Client, flight_id: str, profile_ids: list[str]) ->
     print(f"{flight_id}: departure {departure.isoformat()}, manifest {profile_ids}")
 
 
+def seed_gate_service(url: str, consenting: list[str], flights: list[str]) -> None:
+    with httpx.Client(base_url=url, timeout=60) as gate:
+        try:
+            gate.get("/actuator/health").raise_for_status()
+        except httpx.HTTPError:
+            print(f"gate-service not reachable at {url}: consents and gallery build skipped")
+            return
+        for pid in consenting:
+            gate.post("/v1/consents", json={"profile_id": pid}).raise_for_status()
+        print(f"consent ACTIVE for {consenting} (never {NON_CONSENTED})")
+        for flight_id in flights:
+            r = gate.post(f"/v1/flights/{flight_id}/gallery:build")
+            print(f"{flight_id} gallery build: HTTP {r.status_code} {r.json()}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mocks", default="http://localhost:8002")
     ap.add_argument("--model-service", default="http://localhost:8001")
+    ap.add_argument("--gate-service", default="http://localhost:8081")
     ap.add_argument("--data", type=Path, default=ROOT / "data")
     args = ap.parse_args()
 
@@ -94,6 +112,7 @@ def main():
         if twins:
             put_manifest(mocks, TWIN_FLIGHT, [t.removesuffix("-TWIN") for t in twins] + twins)
     print(f"mock-idp reference images: {sorted(references)} (EXIF stripped)")
+    seed_gate_service(args.gate_service, sorted(references), [MAIN_FLIGHT] + ([TWIN_FLIGHT] if twins else []))
 
 
 if __name__ == "__main__":
