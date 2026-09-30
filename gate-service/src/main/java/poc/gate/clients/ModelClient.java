@@ -1,10 +1,10 @@
 package poc.gate.clients;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 import poc.gate.config.GateProperties;
 import poc.gate.decision.ReasonCode;
 
@@ -33,16 +33,22 @@ public class ModelClient {
         this.http = RestClients.create(builder, props.modelService());
     }
 
+    /**
+     * The breaker is applied by a Spring AOP proxy around this bean: callers get the proxy, which counts failures
+     * and slow calls, and while OPEN rejects calls instantly without any HTTP request.
+     */
+    @CircuitBreaker(name = "model", fallbackMethod = "unavailable")
     public EmbedResponse embed(byte[] image) {
-        try {
-            return http.post()
-                    .uri("/v1/embed")
-                    .contentType(MediaType.IMAGE_JPEG)
-                    .body(image)
-                    .retrieve()               // throws for 4xx/5xx
-                    .body(EmbedResponse.class);
-        } catch (RestClientException e) {     // includes timeouts and connection refused
-            throw new DependencyUnavailableException(ReasonCode.MODEL_UNAVAILABLE, e);
-        }
+        return http.post()
+                .uri("/v1/embed")
+                .contentType(MediaType.IMAGE_JPEG)
+                .body(image)
+                .retrieve()               // throws for 4xx/5xx; timeouts and refused connections throw too
+                .body(EmbedResponse.class);
+    }
+
+    /** Fallback: same parameters plus the Throwable (an HTTP error, a timeout, or CallNotPermittedException). */
+    private EmbedResponse unavailable(byte[] image, Throwable cause) {
+        throw new DependencyUnavailableException(ReasonCode.MODEL_UNAVAILABLE, cause);
     }
 }

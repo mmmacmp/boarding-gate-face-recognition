@@ -1,5 +1,6 @@
 package poc.gate.clients;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -32,18 +33,22 @@ public class IdentityClient {
         }
     }
 
-    /** 1:1 confirmation before boarding. No retry: on the gate's hot path a fast MANUAL beats a slow retry. */
+    /**
+     * 1:1 confirmation before boarding, behind a circuit breaker (see ModelClient.embed for how the proxy works).
+     * No retry: on the gate's hot path a fast MANUAL beats a slow retry, and retries add load to a struggling IdP.
+     */
+    @CircuitBreaker(name = "identity", fallbackMethod = "unavailable")
     public boolean isValid(String profileId, String flightId) {
-        try {
-            VerifyResponse response = http.post()
-                    .uri("/v1/verify")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(new VerifyRequest(profileId, flightId))
-                    .retrieve()
-                    .body(VerifyResponse.class);
-            return response != null && "VALID".equals(response.result());
-        } catch (RestClientException e) {
-            throw new DependencyUnavailableException(ReasonCode.IDP_UNAVAILABLE, e);
-        }
+        VerifyResponse response = http.post()
+                .uri("/v1/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new VerifyRequest(profileId, flightId))
+                .retrieve()
+                .body(VerifyResponse.class);
+        return response != null && "VALID".equals(response.result());
+    }
+
+    private boolean unavailable(String profileId, String flightId, Throwable cause) {
+        throw new DependencyUnavailableException(ReasonCode.IDP_UNAVAILABLE, cause);
     }
 }

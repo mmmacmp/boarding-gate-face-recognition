@@ -19,7 +19,29 @@ spring:
     max-request-size: 6MB
 
 management:
-  endpoints.web.exposure.include: health,prometheus
+  endpoints.web.exposure.include: health,prometheus,circuitbreakers
+  health.circuitbreakers.enabled: true
+
+# Circuit breakers (Resilience4j). Counting window of the last 10 calls; from 5 calls on, >= 50% failed or slow
+# opens the breaker. OPEN = reject instantly (MANUAL without waiting) for 10 s, then HALF_OPEN lets 2 trial calls
+# through: both succeed -> CLOSED, otherwise OPEN again.
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      sliding-window-size: 10
+      minimum-number-of-calls: 5
+      failure-rate-threshold: 50
+      slow-call-duration-threshold: 300ms
+      slow-call-rate-threshold: 50
+      wait-duration-in-open-state: 10s
+      permitted-number-of-calls-in-half-open-state: 2
+      register-health-indicator: true
+  instances:
+    identity:
+      base-config: default
+    model:
+      base-config: default
+      slow-call-duration-threshold: 800ms   # the model-service read timeout (GPU)
 
 gate:
   model-service:
@@ -43,3 +65,6 @@ gate:
   kek:
     path: ../data/kek.p12         # PKCS12 keystore, a stand-in for a KMS/HSM
     password: ${GATE_KEK_PASSWORD:}
+  retention:
+    grace: 2m                     # after departure, before templates are crypto-shredded (short for the demo)
+    purge-interval: 30s

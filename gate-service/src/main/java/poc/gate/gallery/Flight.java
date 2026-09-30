@@ -22,6 +22,7 @@ public class Flight {
     private Instant departureTime;
     private String modelId;
     private byte[] wrappedDek;
+    private Instant departedAt;
 
     protected Flight() {
         // required by JPA, which creates the object first and then fills the fields from the row
@@ -31,17 +32,34 @@ public class Flight {
         this.flightId = flightId;
     }
 
-    /** A (re)build gets a fresh data key; templates encrypted under an old key become unreadable. */
-    public void startBuild(Instant departureTime, byte[] wrappedDek) {
+    /** (Re)build keeps an existing key, so rows that stay (BOARDED) remain consistent with the flight's DEK. */
+    public void startBuild(Instant departureTime, byte[] newWrappedDekIfMissing) {
         this.status = Status.BUILDING;
         this.departureTime = departureTime;
-        this.wrappedDek = wrappedDek;
         this.modelId = null;
+        if (wrappedDek == null) {
+            wrappedDek = newWrappedDekIfMissing;
+        }
     }
 
     public void openBoarding(String modelId) {
         this.status = Status.BOARDING;
         this.modelId = modelId;
+    }
+
+    public void depart(Instant now) {
+        this.status = Status.DEPARTED;
+        this.departedAt = now;
+    }
+
+    /** Crypto-shred: without the wrapped DEK, every template of this flight is unreadable, including backups. */
+    public void shred() {
+        this.wrappedDek = null;
+        this.status = Status.PURGED;
+    }
+
+    public boolean isClosed() {
+        return status == Status.DEPARTED || status == Status.PURGED;
     }
 
     public String getFlightId() {

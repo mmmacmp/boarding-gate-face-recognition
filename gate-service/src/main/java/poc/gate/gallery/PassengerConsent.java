@@ -27,6 +27,11 @@ public class PassengerConsent {
         this.updatedAt = Instant.now();
     }
 
+    public void withdraw() {
+        this.status = Status.WITHDRAWN;
+        this.updatedAt = Instant.now();
+    }
+
     public boolean isActive() {
         return status == Status.ACTIVE;
     }

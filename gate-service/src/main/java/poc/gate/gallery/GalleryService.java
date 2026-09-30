@@ -1,10 +1,13 @@
 package poc.gate.gallery;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import javax.crypto.SecretKey;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import poc.gate.clients.DcsClient;
 import poc.gate.clients.IdentityClient;
 import poc.gate.clients.ModelClient;
@@ -15,7 +18,8 @@ import poc.gate.decision.Candidate;
 @Service
 public class GalleryService {
 
-    public record BuildResult(String flightId, Flight.Status status, int enrolled, int notConsented, int rejected) {
+    public record BuildResult(String flightId, Flight.Status status, int enrolled, int notConsented, int rejected,
+                              int alreadyBoarded) {
     }
 
     private final FlightRepository flights;
@@ -25,10 +29,12 @@ public class GalleryService {
     private final IdentityClient identity;
     private final ModelClient model;
     private final TemplateCrypto crypto;
+    private final AuditLogRepository audit;
 
     // Constructor injection: Spring passes in the beans (like FastAPI Depends), and the fields can be final.
     public GalleryService(FlightRepository flights, PassengerConsentRepository consents, GalleryEntryRepository entries,
-                          DcsClient dcs, IdentityClient identity, ModelClient model, TemplateCrypto crypto) {
+                          DcsClient dcs, IdentityClient identity, ModelClient model, TemplateCrypto crypto,
+                          AuditLogRepository audit) {
         this.flights = flights;
         this.consents = consents;
         this.entries = entries;
@@ -36,6 +42,7 @@ public class GalleryService {
         this.identity = identity;
         this.model = model;
         this.crypto = crypto;
+        this.audit = audit;
     }
 
     /**
@@ -43,11 +50,16 @@ public class GalleryService {
      * Deliberately NOT @Transactional: it makes many slow HTTP calls, and a DB transaction must not stay open
      * across them. If a dependency fails half-way, the exception propagates and the flight stays BUILDING,
      * so every gate event for it gets MANUAL / GALLERY_UNAVAILABLE.
+     * A rebuild preserves boarded state: only ACTIVE rows are replaced, and BOARDED passengers are not re-enrolled.
      */
     public BuildResult build(String flightId) {
-        DcsClient.Manifest manifest = dcs.manifest(flightId);
         Flight flight = flights.findById(flightId).orElseGet(() -> new Flight(flightId));
-        entries.deleteByFlight(flightId);
+        if (flight.isClosed()) {
+            throw new IllegalStateException("flight " + flightId + " has departed; its gallery cannot be rebuilt");
+        }
+        DcsClient.Manifest manifest = dcs.manifest(flightId);
+        entries.deleteActiveByFlight(flightId);
+        Set<String> boarded = entries.findBoardedProfileIds(flightId);
         flight.startBuild(manifest.departureTime(), crypto.wrap(crypto.newDek()));
         flights.save(flight);
         SecretKey dek = crypto.unwrap(flight.getWrappedDek());
@@ -55,9 +67,14 @@ public class GalleryService {
         int enrolled = 0;
         int notConsented = 0;
         int rejected = 0;
+        int alreadyBoarded = 0;
         String modelId = null;
         for (DcsClient.Passenger passenger : manifest.passengers()) {
             String profileId = passenger.profileId();
+            if (boarded.contains(profileId)) {
+                alreadyBoarded++;
+                continue; // boarded once is boarded: a rebuild must never let them board again
+            }
             if (!consents.findById(profileId).map(PassengerConsent::isActive).orElse(false)) {
                 notConsented++;
                 continue; // no consent: we never even fetch the reference image
@@ -74,7 +91,27 @@ public class GalleryService {
         }
         flight.openBoarding(modelId);
         flights.save(flight);
-        return new BuildResult(flightId, flight.getStatus(), enrolled, notConsented, rejected);
+        return new BuildResult(flightId, flight.getStatus(), enrolled, notConsented, rejected, alreadyBoarded);
+    }
+
+    /** Close boarding. Templates are kept until the PurgeJob runs after the grace period. */
+    public Flight depart(String flightId) {
+        Flight flight = flights.findById(flightId).orElseThrow();
+        flight.depart(Instant.now());
+        return flights.save(flight);
+    }
+
+    /**
+     * Retention: delete the flight's gallery rows AND its wrapped DEK, in one transaction.
+     * Called from PurgeJob, a different bean, so the call goes through this bean's transactional proxy.
+     */
+    @Transactional
+    public int purge(String flightId) {
+        Flight flight = flights.findById(flightId).orElseThrow();
+        int deleted = entries.deleteByFlight(flightId);
+        flight.shred(); // managed entity: Hibernate writes wrapped_dek = NULL at commit (dirty checking)
+        audit.save(new AuditLog("PURGE", flightId, "deleted " + deleted + " gallery entries; wrapped DEK destroyed"));
+        return deleted;
     }
 
     /**

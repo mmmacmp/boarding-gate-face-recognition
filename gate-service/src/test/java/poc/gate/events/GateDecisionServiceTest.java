@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import poc.gate.decision.ReasonCode;
 import poc.gate.gallery.Flight;
 import poc.gate.gallery.FlightRepository;
 import poc.gate.gallery.GalleryService;
+import poc.gate.metrics.GateMetrics;
 
 /** Unit test with Mockito fakes (like unittest.mock): no database, no HTTP. The real DecisionPolicy is used. */
 class GateDecisionServiceTest {
@@ -36,8 +38,10 @@ class GateDecisionServiceTest {
     private final GalleryService gallery = mock(GalleryService.class);
     private final IdentityClient identity = mock(IdentityClient.class);
     private final BoardingWriter writer = mock(BoardingWriter.class);
+    private final GateEventRepository events = mock(GateEventRepository.class); // findBy... -> Optional.empty()
     private final GateDecisionService service = new GateDecisionService(flights, model, gallery,
-            new DecisionPolicy(Map.of(MODEL, 0.35), 0.10), identity, writer);
+            new DecisionPolicy(Map.of(MODEL, 0.35), 0.10), identity, writer, events,
+            new GateMetrics(new SimpleMeterRegistry()));
 
     @BeforeEach
     void setUp() {

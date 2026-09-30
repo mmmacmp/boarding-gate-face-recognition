@@ -9,7 +9,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * model). Spring converts "800ms" into a Duration and the YAML map into a Map.
  */
 @ConfigurationProperties("gate")
-public record GateProperties(Endpoint modelService, Endpoint identity, Endpoint dcs, Policy policy, Kek kek) {
+public record GateProperties(Endpoint modelService, Endpoint identity, Endpoint dcs, Policy policy, Kek kek,
+                             Retention retention) {
+
+    public record Retention(Duration grace, Duration purgeInterval) {
+    }
 
     public record Endpoint(String url, Duration connectTimeout, Duration readTimeout) {
     }

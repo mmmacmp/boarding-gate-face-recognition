@@ -1,8 +1,11 @@
 package poc.gate.events;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import poc.gate.clients.DependencyUnavailableException;
 import poc.gate.clients.IdentityClient;
@@ -14,6 +17,7 @@ import poc.gate.decision.ReasonCode;
 import poc.gate.gallery.Flight;
 import poc.gate.gallery.FlightRepository;
 import poc.gate.gallery.GalleryService;
+import poc.gate.metrics.GateMetrics;
 
 /**
  * One gate event, end to end. Fail-safe: any failure becomes MANUAL with a reason code, never an error that
@@ -30,18 +34,29 @@ public class GateDecisionService {
     private final DecisionPolicy policy;
     private final IdentityClient identity;
     private final BoardingWriter writer;
+    private final GateEventRepository events;
+    private final GateMetrics metrics;
 
     public GateDecisionService(FlightRepository flights, ModelClient model, GalleryService gallery,
-                               DecisionPolicy policy, IdentityClient identity, BoardingWriter writer) {
+                               DecisionPolicy policy, IdentityClient identity, BoardingWriter writer,
+                               GateEventRepository events, GateMetrics metrics) {
         this.flights = flights;
         this.model = model;
         this.gallery = gallery;
         this.policy = policy;
         this.identity = identity;
         this.writer = writer;
+        this.events = events;
+        this.metrics = metrics;
     }
 
     public GateEvent handle(String gateId, String flightId, String idempotencyKey, byte[] image) {
+        // Idempotency: a retried request (same key, e.g. after a network timeout) gets the stored decision back.
+        Optional<GateEvent> previous = events.findByIdempotencyKey(idempotencyKey);
+        if (previous.isPresent()) {
+            return previous.get();
+        }
+        long start = System.nanoTime();
         Decision decision;
         try {
             decision = decide(flightId, image);
@@ -51,7 +66,15 @@ public class GateDecisionService {
             log.warn("gate_event_error gate={} flight={} error={}", gateId, flightId, e.getClass().getSimpleName());
             decision = Decision.manual(ReasonCode.INTERNAL_ERROR);
         }
-        GateEvent event = writer.record(idempotencyKey, gateId, flightId, decision);
+        GateEvent event;
+        try {
+            event = writer.record(idempotencyKey, gateId, flightId, decision);
+        } catch (DataIntegrityViolationException e) {
+            // The same key arrived twice at the same moment: the unique constraint let the first insert win and
+            // rolled this transaction back (including any board update), so return the winner's decision.
+            return events.findByIdempotencyKey(idempotencyKey).orElseThrow(() -> e);
+        }
+        metrics.record(event, Duration.ofNanos(System.nanoTime() - start));
         // One structured line per decision. Never images or embeddings; the identity only for BOARD.
         log.info("gate_decision gate={} flight={} decision={} reason={} top1={} top2={} profile={}",
                 gateId, flightId, event.getOutcome(), event.getReason(), round(event.getTop1()),

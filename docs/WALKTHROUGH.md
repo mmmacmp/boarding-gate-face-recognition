@@ -62,3 +62,35 @@ line, delete or simplify it.
 |---|---|---|
 | `application.yml` | profiles of timeouts; `open-in-view: false`; `ddl-auto: validate`; `config.import` for local secrets | |
 | `db/migration/V1__init.sql` | Flyway (≈ Alembic) runs once at startup; tables and why `profile_id` is nullable in `gate_event` | |
+
+## Step 4: resilience, consent, retention, metrics
+
+### Changed classes
+| Class | New concepts to cover | Your explanation |
+|---|---|---|
+| `ModelClient`, `IdentityClient` | `@CircuitBreaker(name, fallbackMethod)`; the AOP proxy (why self-invocation would bypass it); fallback signature = same params + `Throwable`; `CallNotPermittedException` when OPEN; CLOSED → OPEN → HALF_OPEN → CLOSED; why no retry on the hot path; why `referenceImage` has no breaker | |
+| `GateDecisionService` | Idempotency-Key lookup; the race on the same key (unique constraint + `DataIntegrityViolationException` → return the winner); where metrics are recorded (not for replays) | |
+| `GalleryService` | rebuild preserves boarded state (delete ACTIVE only, skip BOARDED, keep the DEK); `depart`; `@Transactional purge` and why `PurgeJob` calls it through another bean; dirty checking in `flight.shred()` | |
+| `Flight` | lifecycle BUILDING → BOARDING → DEPARTED → PURGED; `shred()` = crypto-shredding | |
+| `GalleryEntryRepository` | `deleteActiveByFlight`, `findBoardedProfileIds`, `deleteActiveByProfile`; `@Transactional` on repository methods | |
+| `FlightRepository` | derived query from a method name (`findByStatusAndDepartedAtBefore`) | |
+| `FlightController`, `ConsentController` | `POST /depart`; 409 for a closed flight; `DELETE /v1/consents/{id}`; `ResponseEntity.of(Optional)` → 200 or 404 | |
+| `GateServiceApplication` | `@EnableScheduling` | |
+
+### New classes
+| Class | Concepts to cover | Your explanation |
+|---|---|---|
+| `ConsentService` | `@Transactional` withdraw; managed entities and dirty checking (no `save()`); why BOARDED rows are kept | |
+| `PurgeJob` | `@Scheduled(fixedDelayString=...)` (≈ APScheduler interval job); grace period; one transaction per flight | |
+| `AuditLog`, `AuditLogRepository` | append-only retention audit, no biometrics | |
+| `GateMetrics` | Micrometer `Counter`/`Timer`/`DistributionSummary`; dotted names → Prometheus `_total`/`_seconds`; low-cardinality tags (never a profile id) | |
+| `ApiExceptionHandler` | `@RestControllerAdvice` + `@ExceptionHandler` (≈ FastAPI exception handlers); why DB down is a 503 with a MANUAL body | |
+
+### Config and tests
+| Item | Concepts to cover | Your explanation |
+|---|---|---|
+| `application.yml` `resilience4j.circuitbreaker` | sliding window 10, minimum 5 calls, 50% failure/slow rate, slow-call threshold, 10 s open, 2 half-open calls | |
+| `pom.xml` | Failsafe (`*IT`, `mvn verify`) vs Surefire (`*Test`, `mvn test`); JaCoCo agent + report | |
+| `AbstractGateIT` | `@SpringBootTest`; `@DynamicPropertySource`; WireMock as a fake HTTP server; unique ids instead of DB cleanup | |
+| `BoardingIT`, `ResilienceIT`, `RetentionIT` | one test per failure-mode row; the two-gate race with a latch; `OutputCaptureExtension` for "no identity in logs" | |
+| `ApiExceptionHandlerTest` | `@WebMvcTest` (web layer only) + `@MockitoBean` | |

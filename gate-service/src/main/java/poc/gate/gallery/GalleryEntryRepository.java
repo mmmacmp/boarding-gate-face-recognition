@@ -1,6 +1,7 @@
 package poc.gate.gallery;
 
 import java.util.List;
+import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -28,6 +29,22 @@ public interface GalleryEntryRepository extends JpaRepository<GalleryEntry, Long
     @Query(value = "UPDATE gallery_entry SET status = 'BOARDED' WHERE id = :id AND status = 'ACTIVE'",
             nativeQuery = true)
     int markBoarded(long id);
+
+    @Query(value = "SELECT profile_id FROM gallery_entry WHERE flight_id = :flightId AND status = 'BOARDED'",
+            nativeQuery = true)
+    Set<String> findBoardedProfileIds(String flightId);
+
+    /** Rebuild replaces only ACTIVE rows: BOARDED rows are the record that a passenger already boarded. */
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM gallery_entry WHERE flight_id = :flightId AND status = 'ACTIVE'", nativeQuery = true)
+    int deleteActiveByFlight(String flightId);
+
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM gallery_entry WHERE profile_id = :profileId AND status = 'ACTIVE'",
+            nativeQuery = true)
+    int deleteActiveByProfile(String profileId);
 
     @Modifying
     @Transactional

@@ -75,23 +75,23 @@ gate-service ──Actuator──▶ /actuator/health, /actuator/prometheus, /ac
 1. Idempotency-Key already seen → return the stored decision.
 2. Flight not `BOARDING` or gallery not loaded → `GALLERY_UNAVAILABLE`.
 3. Embed → exactly one face, else `NO_FACE` / `MULTI_FACE`. Model failure → `MODEL_UNAVAILABLE`. (Should: `LOW_QUALITY` as capture feedback via eDifFIQA(T); `PAD_SUSPECT` via MiniFASNet.)
-4. Search this flight's `gallery_entry` rows with status `ACTIVE`, **joined with `passenger_consent` status `ACTIVE` at query time**, with the same `model_id` as the probe. Take top-1 and top-2 cosine.
+4. Search this flight's `gallery_entry` rows with status `ACTIVE`, **joined with `passenger_consent` status `ACTIVE` at query time**, with the same `model_id` as the probe. Take top-1 and top-2 cosine. **No plaintext cache** (decision 30 Sep 2026): the flight's DEK is unwrapped and the matchable rows are decrypted per gate event, so plaintext templates live only for one request.
 5. `top1 < T` → `NO_MATCH`; `top1 − top2 < Δ` → `AMBIGUOUS`.
 6. `mock-idp` confirm (300 ms, breaker, **no retry on the hot path**): failure or open breaker → `IDP_UNAVAILABLE`; `INVALID` → `IDP_REJECTED`.
 7. **Outside** external calls, one `@Transactional` block:
    - `UPDATE gallery_entry SET status='BOARDED' WHERE id=? AND status='ACTIVE'` (0 rows → `ALREADY_BOARDED`);
    - insert `gate_event`;
-   - (should) insert `outbox`;
-   - evict the entry from the per-flight cache after commit.
+   - (should) insert `outbox`.
 8. Metrics: `gate_decisions_total{gate,decision,reason}`, `gate_decision_seconds`, `gate_match_top1_score`, `gate_match_margin`, plus Resilience4j metrics. Log one structured line with no biometrics.
 
 **Crypto and retention**
 - AES-256-GCM (`AES/GCM/NoPadding`), 96-bit random IV, 128-bit tag.
 - AAD = `flightId|profileId|modelId`.
 - Per-flight DEK, wrapped by a KEK from a local PKCS12 keystore (`data/kek.p12`, path and password from environment variables; a stand-in for KMS/HSM).
-- `PurgeJob` (`@Scheduled`), after departure plus a grace period: delete gallery rows, **delete the wrapped DEK** (crypto-shred), evict the cache, write an audit row.
+- `PurgeJob` (`@Scheduled`), after departure plus a grace period: delete gallery rows, **delete the wrapped DEK** (crypto-shred), write an audit row.
 - A test must prove that decryption fails after the shred.
-- Known limit, which must be documented: decrypted templates sit in JVM memory during boarding.
+- Known limit, which must be documented: decrypted templates sit in JVM memory while a gate event is processed (no cache between events; the DEK is unwrapped per event).
+- Gallery rebuild must preserve boarded state: it replaces only `ACTIVE` rows and never re-enrols a passenger who is already `BOARDED` on that flight.
 
 **Default config (placeholders; calibrate and document)**
 - Thresholds: R50 cosine `T=0.35` (placeholder); SFace `T=0.363` (OpenCV Zoo default); margin `Δ=0.10` (placeholder).
@@ -104,7 +104,7 @@ gate-service ──Actuator──▶ /actuator/health, /actuator/prometheus, /ac
 - **D1-AM (Python):** repo skeleton, Postgres via docker compose, model-service `/v1/embed` + pytest, mocks with fault injection, `tools/seed.py` (flight `POC001`, 4–6 volunteers, a labelled "twin" pair).
 - **D1-PM (Java, checkpoint):** Spring Boot project, Flyway V1, `DecisionPolicy` (tests first), `TemplateCrypto` (tests first), gallery build, gate-event happy path. **17:30 checkpoint** (see Stack).
 - **D2-AM:** timeouts and breakers with MANUAL fallbacks + WireMock tests, Idempotency-Key, conditional board update + concurrency test, consent withdraw, purge and crypto-shred + test, Micrometer metrics, JaCoCo.
-- **D2-PM:** `tools/bench_latency.py` (GPU / CPU / CPU capped at 4 threads; p50 and p95; N=200, warm-up 20), `tools/gate_sim.py` demo scenarios, README, `docs/architecture.md`, ADRs 0001–0004, `docs/WALKTHROUGH.md` (**the user writes it**), then record the 2-minute video.
+- **D2-PM:** `tools/bench_latency.py` (GPU / CPU / CPU capped at 4 threads; p50 and p95; N=200, warm-up 20; include the per-event decrypt + search cost), `tools/gate_sim.py` demo scenarios, README, `docs/architecture.md`, ADRs 0001–0004, `docs/WALKTHROUGH.md` (**the user writes it**), then record the 2-minute video.
   - Then, only if time remains: React console → quality/PAD flags → outbox → CI → stretch.
 - **Stretch (optional):** safe matcher upgrade.
   - `model_id` guard; a shadow gallery built with SFace from `mock-idp` reference images.
@@ -132,7 +132,9 @@ spikes/ (only if the Day-1 checkpoint triggers)
 - model-service (GPU): `cd model-service; $env:DEVICE="cuda"; uvicorn app.main:app --port 8001` (also `MODEL=sface`, `CPU_THREADS=4`, `MIN_FACE_PX=80`); tests: `python -m pytest`
 - mocks: `cd mocks; uvicorn main:app --port 8002`; tests: `python -m pytest`
 - gate-service: `cd gate-service; .\mvnw.cmd spring-boot:run` (port **8081**: 8080 is taken by a local Apache httpd, don't touch it); unit tests: `.\mvnw.cmd test` (no DB); all tests: `.\mvnw.cmd verify` (needs the compose DB; JaCoCo report in `target/site/jacoco`)
-- Seed and scenarios: `python tools/seed.py`, then `python tools/gate_sim.py --scenario demo`
+- Synthetic passengers (once): `python tools/fetch_digiface_subset.py` (DigiFace-1M subset via HTTP range requests, non-commercial licence, local only)
+- Demo reset (a rebuild deliberately keeps boarded state): `docker compose -f ops/docker-compose.yml exec -T db psql -U poc -d gate -c "TRUNCATE flight, passenger_consent, gallery_entry, gate_event, outbox, audit_log"`
+- Seed and scenarios: `python tools/seed.py`, then `python tools/gate_sim.py --scenario demo` (`--twin-from-photo` reproduces the reference-quality finding)
 - Latency: `python tools/bench_latency.py --device cuda|cpu|cpu4`
 
 ## Definition of done

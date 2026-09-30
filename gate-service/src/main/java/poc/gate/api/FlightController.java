@@ -43,7 +43,18 @@ public class FlightController {
             // Manifest, identity provider or model-service failed: the flight boards manually.
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(new BuildFailed(flightId, "GALLERY_UNAVAILABLE", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new BuildFailed(flightId, "CLOSED", e.getMessage()));
         }
+    }
+
+    /** Boarding closed. The PurgeJob crypto-shreds the gallery after the grace period. */
+    @PostMapping("/v1/flights/{flightId}/depart")
+    public ResponseEntity<FlightView> depart(@PathVariable String flightId) {
+        if (flights.existsById(flightId)) {
+            gallery.depart(flightId);
+        }
+        return get(flightId);
     }
 
     @GetMapping("/v1/flights/{flightId}")
