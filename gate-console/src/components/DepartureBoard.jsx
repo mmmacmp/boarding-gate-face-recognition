@@ -33,7 +33,7 @@ export default function DepartureBoard({ flight }) {
       <div className="board-cell"><span className="board-label">Flight</span><SplitFlap text="DEMO01" width={6} /></div>
       <div className="board-cell wide">
         <span className="board-label">Destination <span lang="ar" dir="rtl">الوجهة</span></span>
-        <SplitFlap text="AURORA CITY" width={11} />
+        <SplitFlap text="DUBAI CITY" width={11} />
       </div>
       <div className="board-cell"><span className="board-label">Gate</span><SplitFlap text="G1" width={2} /></div>
       <div className="board-cell"><span className="board-label">Boarding</span><SplitFlap text={boarding} width={5} /></div>
