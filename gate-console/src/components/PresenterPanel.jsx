@@ -108,7 +108,8 @@ export default function PresenterPanel(props) {
         </ol>
       </div>
       <div className="util-row">
-        <button onClick={onPlayAll} disabled={busy || resetting || (!playing && !step)}>
+        {/* while playing, Pause must stay clickable even though a step is busy; it stops after the current step */}
+        <button onClick={onPlayAll} disabled={resetting || (!playing && (busy || !step))}>
           {playing ? <><PauseIcon size={16} /> Pause</> : <><PlayIcon size={16} /> Play all (verification)</>}
         </button>
         <button className="danger" onClick={onReset} disabled={busy || resetting || playing}>
