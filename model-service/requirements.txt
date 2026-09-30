@@ -1,0 +1,12 @@
+# model-service (Python 3.11). ONNX Runtime is installed separately, because insightface pulls the CPU build:
+#   pip install -r model-service/requirements.txt
+#   pip uninstall -y onnxruntime onnxruntime-gpu
+#   pip install "onnxruntime-gpu[cuda,cudnn]==1.30.0"    # CUDA 13 driver; use ==1.26.0 for CUDA 12
+#   (CPU-only machine: pip install onnxruntime==1.30.0)
+insightface==2.0
+opencv-python==5.0.0.93
+fastapi==0.142.1
+uvicorn==0.54.0
+prometheus-fastapi-instrumentator==8.1.0
+pytest
+httpx

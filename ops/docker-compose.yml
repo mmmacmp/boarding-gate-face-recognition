@@ -1,0 +1,23 @@
+# Local infrastructure for the POC. Only PostgreSQL runs in Docker; the model-service runs natively for GPU access.
+# Host port 5433 (not 5432) because this machine already runs a local PostgreSQL service on 5432.
+name: poc
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: gate
+      POSTGRES_USER: poc
+      POSTGRES_PASSWORD: poc          # local toy credentials, never reused anywhere
+    ports:
+      - "127.0.0.1:5433:5432"         # bound to localhost only
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro   # runs once, on first start with an empty volume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poc -d gate"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
