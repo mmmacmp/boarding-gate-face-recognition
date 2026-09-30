@@ -1,0 +1,95 @@
+/* Default theme: light "airport terminal" (white + crimson); styles.css holds the dark theme (?theme=dark).
+   Deliberately not any airline's brand: a deeper crimson than any airline red, no logos, no brand typeface.
+   Flat surfaces, thin borders, no glows or gradients; split-flap cells stay dark like a real departure board. */
+:root[data-theme='light'] {
+  --bg-0: #f3f4f6;
+  --bg-1: #f3f4f6;
+  --card: #ffffff;
+  --card-2: #ffffff;
+  --line: #e2e5ea;
+  --line-2: #cfd4dc;
+  --ink: #15181e;
+  --ink-2: #454c59;
+  --ink-3: #737b89;
+  --gold: #a3172b;            /* the accent: crimson */
+  --gold-soft: #fbeef0;
+  --board: #16803c;
+  --manual: #f0a012;
+  --retake: #5b6474;
+  --critical: #d42a2a;
+  --above: #1f4fbf;
+  --sans: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: light;
+}
+
+[data-theme='light'] body { background: var(--bg-0); font-size: 15.5px; }
+[data-theme='light'] button { background: #fff; border-color: var(--line-2); color: var(--ink); }
+[data-theme='light'] button:hover:not(:disabled) { border-color: var(--gold); }
+[data-theme='light'] button.primary { background: var(--gold); color: #fff; }
+[data-theme='light'] button.primary:hover:not(:disabled) { background: #8a1224; }
+[data-theme='light'] select { background: #fff; }
+
+/* Departure board: white frame with a crimson top rule, dark flap cells with white letters */
+[data-theme='light'] .board { background: #fff; border: 1px solid var(--line); border-top: 4px solid var(--gold); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); }
+[data-theme='light'] .flap { background: linear-gradient(180deg, #25282f 49%, #1b1e24 51%); color: #fff; box-shadow: none; }
+[data-theme='light'] .status.open .flap { color: #6ee7a0; }
+[data-theme='light'] .status.closed .flap { color: #ff8b8b; }
+[data-theme='light'] .disclaimer { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--gold); color: var(--gold); }
+
+/* Cards: flat white with a hairline shadow */
+[data-theme='light'] .card { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08); }
+[data-theme='light'] .card-head { color: var(--ink); text-transform: uppercase; letter-spacing: 0.8px; font-size: 13px; }
+[data-theme='light'] .capture-stage { background: #eceef2; }
+[data-theme='light'] .bracket { filter: none; }
+
+/* Decision banner: solid colours, no glow */
+[data-theme='light'] .banner-wait { border-color: var(--line-2); }
+[data-theme='light'] .banner-board { background: var(--board); color: #fff; box-shadow: none; }
+[data-theme='light'] .banner-manual { background: var(--manual); color: #1d1405; box-shadow: none; }
+[data-theme='light'] .banner-retake { background: #eef1f6; color: var(--ink); border: 1px solid #b5bdca; box-shadow: none; }
+
+/* Gallery */
+[data-theme='light'] .area { background: #fafbfc; }
+[data-theme='light'] .area-waiting, [data-theme='light'] .area-purged { background: #fdf6f7; border-color: #efd3d8; }
+[data-theme='light'] .tile { background: #fff; }
+[data-theme='light'] .tile.scanning { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(163, 23, 43, 0.25); }
+[data-theme='light'] .tile.ring-top1 { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+[data-theme='light'] .tile.ring-top2 { border-color: #5b6474; box-shadow: 0 0 0 2px #5b6474; }
+[data-theme='light'] .rank.ring-top1 { background: var(--gold); color: #fff; }
+[data-theme='light'] .rank.ring-top2 { background: #5b6474; color: #fff; }
+[data-theme='light'] .chip-BOARDED { color: var(--board); }
+[data-theme='light'] .chip-PURGED { color: var(--critical); }
+[data-theme='light'] .synthetic-tag { background: rgba(255, 255, 255, 0.88); color: var(--ink-2); }
+[data-theme='light'] .scorebar, [data-theme='light'] .wf-track, [data-theme='light'] .timeline, [data-theme='light'] .progress { background: #e9ebef; }
+[data-theme='light'] .scorebar-fill.above { background: var(--above); }
+[data-theme='light'] .scorebar-fill.below { background: #9aa3b2; }
+[data-theme='light'] .scorebar-t, [data-theme='light'] .t-swatch { background: var(--ink); box-shadow: none; }
+[data-theme='light'] .waiting-count strong { color: var(--gold); }
+[data-theme='light'] .purged-note { background: #fdecec; color: #9b1c1c; border-color: #f3c2c2; }
+
+/* Comparison */
+[data-theme='light'] .gauge-bg { stroke: #e5e7eb; }
+[data-theme='light'] .gauge-fill.above { stroke: var(--above); filter: none; }
+[data-theme='light'] .gauge-t { stroke: var(--ink); }
+[data-theme='light'] .live-score.above { background: #eef3fd; border-color: #b9cbf2; }
+[data-theme='light'] .live-score.below { background: #fff7e6; border-color: #f3d29a; }
+
+/* Presenter */
+[data-theme='light'] .tabs button.on, [data-theme='light'] .source-toggle button.on { background: var(--gold-soft); color: var(--gold); border-color: var(--gold); }
+[data-theme='light'] .progress div { background: var(--gold); }
+[data-theme='light'] .step-card { background: #fafbfc; border-color: var(--line); }
+[data-theme='light'] .step-card.is-action { border-color: #bcd0ee; }
+[data-theme='light'] .is-action .step-kind { color: #2456a6; }
+[data-theme='light'] .step-card.done { color: var(--board); }
+[data-theme='light'] .code { background: #eef0f3; }
+[data-theme='light'] .mismatch { background: #fdecec; color: #9b1c1c; border-color: #f3c2c2; }
+[data-theme='light'] .results li.ok svg { color: var(--board); }
+[data-theme='light'] .results li.bad { background: #fdecec; }
+[data-theme='light'] .results li.bad svg { color: var(--critical); }
+
+/* Operations */
+[data-theme='light'] .light-CLOSED, [data-theme='light'] .light-HALF_OPEN { box-shadow: none; }
+[data-theme='light'] .light-OPEN { box-shadow: 0 0 0 3px rgba(212, 42, 42, 0.25); animation: none; } /* a pulse washes out on white */
+[data-theme='light'] .segment.CLOSED { background: #3aa864; }
+[data-theme='light'] .demo-setting { background: #fff7e6; color: #8a4b08; }
+[data-theme='light'] .toast { background: #fff; box-shadow: 0 6px 20px rgba(16, 24, 40, 0.14); }
