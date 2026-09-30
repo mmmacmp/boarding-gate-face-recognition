@@ -34,6 +34,10 @@ public interface GalleryEntryRepository extends JpaRepository<GalleryEntry, Long
             nativeQuery = true)
     Set<String> findBoardedProfileIds(String flightId);
 
+    @Query(value = "SELECT profile_id FROM gallery_entry WHERE flight_id = :flightId AND status = 'ACTIVE'",
+            nativeQuery = true)
+    Set<String> findActiveProfileIds(String flightId);
+
     /** Rebuild replaces only ACTIVE rows: BOARDED rows are the record that a passenger already boarded. */
     @Modifying
     @Transactional

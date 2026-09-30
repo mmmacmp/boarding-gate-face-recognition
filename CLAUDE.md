@@ -136,7 +136,11 @@ spikes/ (only if the Day-1 checkpoint triggers)
 - Demo reset (a rebuild deliberately keeps boarded state): `docker compose -f ops/docker-compose.yml exec -T db psql -U poc -d gate -c "TRUNCATE flight, passenger_consent, gallery_entry, gate_event, outbox, audit_log"`
 - Seed and scenarios: `python tools/seed.py`, then `python tools/gate_sim.py --scenario demo` (`--twin-from-photo` reproduces the reference-quality finding)
 - Latency: `python tools/bench_latency.py --device cuda|cpu|cpu4`
-- Demo console (Step 6): `cd gate-console; npm install; npm run dev` → http://localhost:5173 (Vite proxies `/gate`, `/mocks`, `/model`; no CORS; `/demo/reset` runs `python tools/demo_scenario.py --reset`)
+- Demo console: `cd gate-console; npm install; npm run dev` → http://localhost:5173 (Vite proxies `/gate`, `/mocks`, `/model`; no CORS). It is the presenter-driven X-ray console for flight DEMO01 and needs demo mode:
+  - once: `python tools/make_demo_assets.py` (S01-S03 + no-face / two-faces / tiny-face probes in gitignored `data/demo/`, verified with the model-service)
+  - mocks with `$env:DEMO_XRAY="true"` (reference thumbnails); gate-service with `$env:SPRING_PROFILES_ACTIVE="demo"` (`application-demo.yml`: X-ray on, demo-only breaker window 2, 3 s purge grace)
+  - `python tools/demo_scenario.py --reset-demo-flight` (DEMO01 only, ~10 s; the console's Reset button); rehearsal: `docs/demo-rehearsal.md`
+  - X-ray screenshots show faces: keep them in gitignored `docs/img/xray/`; never commit media with the volunteer's face
 
 ## Definition of done
 - Every row of the failure-mode table is green in tests.

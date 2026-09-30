@@ -36,3 +36,6 @@ model-service/models/
 
 # Generated charts (scores only, no faces) are allowed
 !docs/img/*.png
+
+# X-ray demo screenshots show real (volunteer) and synthetic faces: local only
+docs/img/xray/

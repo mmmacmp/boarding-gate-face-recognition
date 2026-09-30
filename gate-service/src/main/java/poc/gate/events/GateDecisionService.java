@@ -58,9 +58,10 @@ public class GateDecisionService {
         }
         long start = System.nanoTime();
         StageTimings timings = new StageTimings();
+        XrayDetails xray = new XrayDetails();
         Decision decision;
         try {
-            decision = decide(flightId, image, timings);
+            decision = decide(flightId, image, timings, xray);
         } catch (DependencyUnavailableException e) {
             decision = Decision.manual(e.reason());
         } catch (RuntimeException e) {
@@ -73,6 +74,7 @@ public class GateDecisionService {
             event = writer.record(idempotencyKey, gateId, flightId, decision);
             timings.dbMs = StageTimings.since(dbStart);
             event.setTimings(timings);
+            event.setXray(xray);
         } catch (DataIntegrityViolationException e) {
             // The same key arrived twice at the same moment: the unique constraint let the first insert win and
             // rolled this transaction back (including any board update), so return the winner's decision.
@@ -86,7 +88,7 @@ public class GateDecisionService {
         return event;
     }
 
-    private Decision decide(String flightId, byte[] image, StageTimings timings) {
+    private Decision decide(String flightId, byte[] image, StageTimings timings, XrayDetails xray) {
         Flight flight = flights.findById(flightId).orElse(null);
         if (flight == null || flight.getStatus() != Flight.Status.BOARDING) {
             return Decision.manual(ReasonCode.GALLERY_UNAVAILABLE);
@@ -98,20 +100,22 @@ public class GateDecisionService {
         } finally {
             timings.embedMs = StageTimings.since(embedStart); // also when it failed: a timeout shows as a bar
         }
+        xray.faceBoxes = probe.faces().stream().map(ModelClient.Face::bbox).toList();
         if (probe.onlySmallFaces()) {
             return Decision.manual(ReasonCode.LOW_QUALITY); // a size-based proxy, not an image-quality model
         }
         if (!probe.modelId().equals(flight.getModelId())) {
             return Decision.manual(ReasonCode.MODEL_MISMATCH); // never compare templates from different models
         }
-        List<Candidate> top2 = List.of();
+        List<Candidate> candidates = List.of();
         if (probe.faceCount() == 1) {
             long start = System.nanoTime();
-            top2 = gallery.searchTop2(flight, probe.modelId(), probe.embedding());
+            candidates = gallery.search(flight, probe.modelId(), probe.embedding()); // all candidates, best first
+            candidates.forEach(c -> xray.scores.put(c.profileId(), c.score()));
             metrics.recordSearch(Duration.ofNanos(System.nanoTime() - start));
             timings.searchMs = StageTimings.since(start);
         }
-        Decision decision = policy.decide(probe.faceCount(), probe.modelId(), top2);
+        Decision decision = policy.decide(probe.faceCount(), probe.modelId(), candidates);
         if (!decision.isBoard()) {
             return decision;
         }

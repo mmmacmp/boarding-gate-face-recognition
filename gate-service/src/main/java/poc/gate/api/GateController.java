@@ -1,8 +1,10 @@
 package poc.gate.api;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +21,7 @@ import poc.gate.events.GateDecisionService;
 import poc.gate.events.GateEvent;
 import poc.gate.events.GateEventRepository;
 import poc.gate.events.StageTimings;
+import poc.gate.events.XrayDetails;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
@@ -26,26 +29,34 @@ import tools.jackson.databind.annotation.JsonNaming;
 @RestController
 public class GateController {
 
-    /** timings is only present in the response to the request that made the decision (it is not stored). */
+    /**
+     * timings is only present in the response to the request that made the decision (it is not stored).
+     * xray (demo only) is left out of the JSON entirely unless demo.xray=true, so normal responses are unchanged.
+     */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record GateEventResponse(long eventId, String gateId, String flightId, Decision.Outcome decision,
                                     ReasonCode reason, String profileId, Double top1, Double top2,
-                                    Instant createdAt, StageTimings timings) {
+                                    Instant createdAt, StageTimings timings,
+                                    @JsonInclude(JsonInclude.Include.NON_NULL) XrayDetails xray) {
 
-        static GateEventResponse from(GateEvent e) {
+        static GateEventResponse from(GateEvent e, boolean includeXray) {
             return new GateEventResponse(e.getId(), e.getGateId(), e.getFlightId(), e.getOutcome(), e.getReason(),
-                    e.getProfileId(), e.getTop1(), e.getTop2(), e.getCreatedAt(), e.getTimings());
+                    e.getProfileId(), e.getTop1(), e.getTop2(), e.getCreatedAt(), e.getTimings(),
+                    includeXray ? e.getXray() : null);
         }
     }
 
     private final GateDecisionService service;
     private final GateEventRepository events;
     private final GateProperties props;
+    private final boolean xray;
 
-    public GateController(GateDecisionService service, GateEventRepository events, GateProperties props) {
+    public GateController(GateDecisionService service, GateEventRepository events, GateProperties props,
+                          @Value("${demo.xray:false}") boolean xray) {
         this.service = service;
         this.events = events;
         this.props = props;
+        this.xray = xray;
     }
 
     @PostMapping(path = "/v1/gates/{gateId}/events", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -54,13 +65,13 @@ public class GateController {
                                    @RequestHeader("Idempotency-Key") String idempotencyKey,
                                    @RequestPart("image") MultipartFile image) throws IOException {
         // The image bytes stay in memory for this request only; nothing writes them to disk or logs.
-        return GateEventResponse.from(service.handle(gateId, flightId, idempotencyKey, image.getBytes()));
+        return GateEventResponse.from(service.handle(gateId, flightId, idempotencyKey, image.getBytes()), xray);
     }
 
     /** Newest 20 decisions for the operations console (profile_id is only ever stored for BOARD). */
     @GetMapping("/v1/events")
     public List<GateEventResponse> recent() {
-        return events.findTop20ByOrderByIdDesc().stream().map(GateEventResponse::from).toList();
+        return events.findTop20ByOrderByIdDesc().stream().map(e -> GateEventResponse.from(e, false)).toList();
     }
 
     /** Thresholds per model and the margin, so the console can draw them next to the scores. */

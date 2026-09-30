@@ -49,7 +49,7 @@ class GateDecisionServiceTest {
         flight.openBoarding(MODEL);
         when(flights.findById("POC001")).thenReturn(Optional.of(flight));
         when(model.embed(IMAGE)).thenReturn(oneFace());
-        when(gallery.searchTop2(any(), anyString(), any())).thenReturn(
+        when(gallery.search(any(), anyString(), any())).thenReturn(
                 List.of(new Candidate(7, "P001", 0.60), new Candidate(8, "P002", 0.20)));
         when(identity.isValid("P001", "POC001")).thenReturn(true);
         // The writer just turns the decision into an event (the conditional update is tested in Step 4).
@@ -86,7 +86,7 @@ class GateDecisionServiceTest {
         GateEvent event = handle();
         assertThat(event.getReason()).isEqualTo(ReasonCode.LOW_QUALITY);
         assertThat(event.getTimings().searchMs).isNull(); // the search never ran
-        verify(gallery, never()).searchTop2(any(), anyString(), any());
+        verify(gallery, never()).search(any(), anyString(), any());
     }
 
     @Test
@@ -122,12 +122,12 @@ class GateDecisionServiceTest {
     void probeFromADifferentModelIsNeverCompared() {
         when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse("sface-2021dec", 128, oneFace().faces(), 0));
         assertThat(handle().getReason()).isEqualTo(ReasonCode.MODEL_MISMATCH);
-        verify(gallery, never()).searchTop2(any(), anyString(), any());
+        verify(gallery, never()).search(any(), anyString(), any());
     }
 
     @Test
     void unexpectedErrorIsStillManual() {
-        when(gallery.searchTop2(any(), anyString(), any())).thenThrow(new IllegalStateException("cannot decrypt"));
+        when(gallery.search(any(), anyString(), any())).thenThrow(new IllegalStateException("cannot decrypt"));
         assertThat(handle().getReason()).isEqualTo(ReasonCode.INTERNAL_ERROR);
     }
 
@@ -136,6 +136,6 @@ class GateDecisionServiceTest {
         ModelClient.Face face = oneFace().faces().get(0);
         when(model.embed(IMAGE)).thenReturn(new ModelClient.EmbedResponse(MODEL, 2, List.of(face, face), 0));
         assertThat(handle().getReason()).isEqualTo(ReasonCode.MULTI_FACE);
-        verify(gallery, never()).searchTop2(any(), anyString(), any());
+        verify(gallery, never()).search(any(), anyString(), any());
     }
 }

@@ -104,3 +104,19 @@ def test_faults_do_not_affect_dcs_stub():
     client.post("/admin/faults", json={"down": True})
     client.put("/admin/flights/POC001/manifest", json=MANIFEST)
     assert client.get("/v1/flights/POC001/manifest").status_code == 200
+
+
+# --- demo X-ray thumbnails (DEMO ONLY, env DEMO_XRAY) ------------------------------------------------------------
+
+def test_thumbnail_is_404_by_default(monkeypatch):
+    monkeypatch.delenv("DEMO_XRAY", raising=False)
+    client.put("/admin/profiles/P001/thumbnail", content=b"thumb")
+    assert client.get("/v1/demo/profiles/P001/thumbnail").status_code == 404
+
+
+def test_thumbnail_served_when_enabled_even_while_idp_is_down(monkeypatch):
+    monkeypatch.setenv("DEMO_XRAY", "true")
+    client.put("/admin/profiles/P001/thumbnail", content=b"thumb")
+    client.post("/admin/faults", json={"down": True})
+    r = client.get("/v1/demo/profiles/P001/thumbnail")
+    assert r.status_code == 200 and r.content == b"thumb"

@@ -31,6 +31,8 @@ public class GateEvent {
     private Instant createdAt;
     @Transient // not a column: only lives in memory for the response of the request that created the event
     private StageTimings timings;
+    @Transient // demo X-ray details, same lifetime as timings
+    private XrayDetails xray;
 
     protected GateEvent() {
     }
@@ -89,5 +91,13 @@ public class GateEvent {
 
     void setTimings(StageTimings timings) {
         this.timings = timings;
+    }
+
+    public XrayDetails getXray() {
+        return xray;
+    }
+
+    void setXray(XrayDetails xray) {
+        this.xray = xray;
     }
 }

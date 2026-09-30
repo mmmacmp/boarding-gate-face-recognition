@@ -4,11 +4,13 @@
 > external system here (identity provider, departure control) is a mock with a hypothetical API. Thresholds are
 > illustrative. No accuracy claims.
 
-![Demo console: a synthetic passenger boards after the identity-provider breaker went OPEN, HALF_OPEN and CLOSED again](docs/img/console.png)
+![X-ray demo console at 1920×1080: P001 has just boarded and moved to "Boarded"; all face images are blurred for this README](docs/img/console-xray-public.png)
 
-*The demo console (`gate-console/`) after a slow-identity-provider scene: the breaker timeline shows CLOSED → OPEN →
-HALF_OPEN → CLOSED, and the waterfall splits the last decision into embed, decrypt + search, identity check and DB
-write. Synthetic passengers are shown by id and score only; their images are never displayed.*
+*The presenter-driven X-ray console (`gate-console/`, demo mode only) right after a BOARD: the passenger's tile has moved
+to "Boarded" because the database says so, the comparison card shows score and margin against T and Δ, and the
+waterfall splits the decision into embed, decrypt + search, identity check and DB write. **All face images are blurred
+in this README copy**; the live demo shows them (volunteer with consent; synthetic faces from DigiFace-1M, research
+licence).*
 
 ## 1. What this is
 
@@ -214,16 +216,38 @@ The operations panel shows gallery counts, the manual-fallback rate over the las
 model down), consent withdrawal, a "reset demo" button (the same reset as the demo script) and recent events. The
 Vite dev server proxies every call, so the services need no CORS. Identity is shown only for `BOARD`.
 
+**Presenter demo (X-ray view, flight DEMO01).** A 5-passenger demo flight (P001, the simulated look-alike P001-TWIN,
+and synthetic S01–S03) with a 15-probe script that covers every decision path: poor capture, look-alike, consent
+withdrawal, clean BOARD, boarded-not-searched, idempotent replay, stranger, no face, two faces, face too small,
+identity provider INVALID / slow, breaker OPEN and recovery, face service down, and depart + crypto-shred. Nothing
+runs until the presenter clicks; every probe shows expected vs actual. POC001 (49 passengers) is unchanged for the
+benchmark and the score analysis. Demo mode is off by default and needs two switches:
+
+```powershell
+.\.venv\Scripts\python tools\make_demo_assets.py                              # once: S01-S03 + special probes in data/demo/
+$env:DEMO_XRAY="true"; cd mocks; ..\.venv\Scripts\python -m uvicorn main:app --port 8002          # thumbnails
+$env:SPRING_PROFILES_ACTIVE="demo"; cd gate-service; .\mvnw.cmd spring-boot:run                  # application-demo.yml
+.\.venv\Scripts\python tools\demo_scenario.py --reset                         # full reset incl. DEMO01 (~20 s)
+cd gate-console; npm run dev                                                   # http://localhost:5173, "Reset demo" ~10 s
+```
+
+The demo profile uses a **demo-only** identity breaker (window 2, minimum 2 calls, 5 s open, 1 trial call; labelled in
+the console) and a 3 s purge grace; the tested defaults are unchanged. Rehearsal checklist:
+[`docs/demo-rehearsal.md`](docs/demo-rehearsal.md).
+
 Volunteer photos go in `data/volunteers/<id>/` (layout in `data/README-consent.md`, gitignored). The demo script and
 recording notes: [`docs/demo-script.md`](docs/demo-script.md).
 
 ## 11. Tests and coverage
 
-- gate-service: 37 unit tests (`mvnw test`, no DB) + 20 integration tests (`mvnw verify`, real Postgres `gate_test`,
-  WireMock for all HTTP dependencies). One test per failure-mode row. JaCoCo: **90.0% line, 88.6% branch**
-  (`gate-service/target/site/jacoco`). `DecisionPolicy` and `TemplateCrypto` tests were written first.
+- gate-service: 37 unit tests (`mvnw test`, no DB) + 24 integration tests (`mvnw verify`, real Postgres `gate_test`,
+  WireMock for all HTTP dependencies). One test per failure-mode row, plus tests proving the demo X-ray features are
+  **off by default** (404, no `xray` block) and correct when enabled. `DecisionPolicy` and `TemplateCrypto` tests were
+  written first. JaCoCo report in `gate-service/target/site/jacoco`.
 - model-service: 21 pytest tests (fake-backend contract tests + real-model tests; photo tests skip without `data/`).
-- mocks: 14 pytest tests.
+- mocks: 16 pytest tests (incl. the demo thumbnail endpoint being off by default).
+- Demo script: the 15 DEMO01 probes were run end to end 6 times from a reset (2× "Play all", 4× scripted clicks in a
+  headless 1920×1080 browser): 90 of 90 outcomes matched.
 - Gap to "100% unit tests in CI": no CI pipeline; controllers and the console endpoints (`/v1/events`,
   `/v1/policy`) are covered mainly through the end-to-end demo; the console itself has no automated tests.
 
@@ -233,9 +257,15 @@ recording notes: [`docs/demo-script.md`](docs/demo-script.md).
 - **License-clean mode:** `MODEL=sface` (YuNet + SFace, OpenCV Zoo, MIT / Apache-2.0). Runs on CPU only here.
 - **Synthetic passengers: DigiFace-1M** (Microsoft, WACV 2023, https://github.com/microsoft/DigiFace1M), Research Use of
   Data Agreement v1.0, **non-commercial research only**; a 49-identity subset (+1 stranger) fetched with HTTP range
-  requests, kept local (gitignored), never shown in the recording. One identity (S035) is excluded because its
-  reference face is below the 150 px enrolment guideline.
-- **Volunteer photos:** one consenting volunteer (the author), local only, never committed.
+  requests, kept local (gitignored). One identity (S035) is excluded because its reference face is below the 150 px
+  enrolment guideline. The X-ray demo shows a handful of these images on screen with the attribution line
+  "Synthetic faces: DigiFace-1M, Microsoft, research licence (R-UDA v1.0, non-commercial)"; §5.5 of the licence allows
+  de minimis portions to explain use, and §3.1 requires anyone who redistributes the data (e.g. a recording) to pass on
+  the credit and bind recipients to the R-UDA terms. Citation: G. Bae, M. de La Gorce, T. Baltrušaitis, C. Hewitt,
+  D. Chen, J. Valentin, R. Cipolla, J. Shen, "DigiFace-1M: 1 Million Digital Face Images for Face Recognition",
+  WACV 2023.
+- **Volunteer photos:** one consenting volunteer (the author), local only, never committed. Screenshots of the X-ray
+  view (they show faces) stay in the gitignored `docs/img/xray/`; the README image has every face blurred.
 
 ## 13. Production gaps
 
@@ -257,6 +287,9 @@ Explicit, not exhaustive:
   runbooks; no threat model or penetration test; the model-service serialises inference with one lock (one gate).
 - **Capture:** no multi-camera walk-through, tailgating control or accessibility handling (children, PRM, face
   coverings); "low quality" is only a face-size proxy, not an image-quality model (eDifFIQA / OFIQ).
+- **Demo X-ray mode:** per-candidate scores keyed by profile id, a pseudonymous gallery view and reference thumbnails
+  exist only behind `demo.xray` / `DEMO_XRAY` (default off, tested). A production gate would never expose them; the
+  demo profile also uses a faster breaker (window 2) and a 3 s purge grace.
 - **Console:** a local dev tool (Vite dev server, no authentication); its reset and fault controls must never exist in
   a production gate UI.
 

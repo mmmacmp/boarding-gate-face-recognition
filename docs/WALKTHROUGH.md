@@ -123,3 +123,23 @@ line, delete or simplify it.
 | `GatePanel.jsx`, `Webcam.jsx` | component state with `useState`; object URLs; `getUserMedia` + canvas capture; synthetic images never rendered | |
 | `DecisionBanner.jsx`, `reasons.js` | re-mount with `key` to replay the CSS animation; the one privacy rule `shownProfile` | |
 | `OpsPanel.jsx`, `BreakerTimeline.jsx`, `LatencyWaterfall.jsx`, `RecentEvents.jsx` | turning transition events into timeline segments; waterfall offsets | |
+
+## Step 8: presenter X-ray demo (demo mode only)
+
+### Java
+| Item | Concepts to cover | Your explanation |
+|---|---|---|
+| `DemoController` | `@ConditionalOnProperty`: the bean (and its URLs) only exists when `demo.xray=true`, so the default returns 404; manifest + boarded/active rows + consent → status; reading breaker config from `CircuitBreakerRegistry`; demo-only breaker reset | |
+| `XrayDetails` | a transient holder like `StageTimings`; why the controller, not the service, decides whether it leaves the process | |
+| `GateController` | `@JsonInclude(NON_NULL)` on one record component so normal responses are byte-for-byte unchanged; `@Value` constructor parameter | |
+| `GalleryService.search` | returns every candidate (the policy still uses only the top two) | |
+| `application-demo.yml` | Spring profiles (`SPRING_PROFILES_ACTIVE=demo`) layered over `application.yml`; demo breaker vs tested default | |
+| `DemoXrayDisabledIT`, `DemoXrayEnabledIT` | `@TestPropertySource`; `@AutoConfigureMockMvc` in an integration test | |
+
+### Console
+| File | Concepts to cover | Your explanation |
+|---|---|---|
+| `script.js` | the 21-step script as data: 15 probes + 6 actions, expected outcomes | |
+| `App.jsx` | one gate event as a sequence (sweep → send → scan → reveal → re-fetch); expected vs actual; Play all | |
+| `useFlip.js` | FLIP with the Web Animations API: tiles move only when the fetched gallery changes | |
+| `GalleryBoard.jsx`, `ComparisonCard.jsx`, `GateCapture.jsx`, `DecisionBanner.jsx`, `DepartureBoard.jsx` | presentational components; SVG brackets/gauge/countdown; bilingual RTL text | |

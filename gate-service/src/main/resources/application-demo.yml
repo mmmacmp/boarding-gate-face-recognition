@@ -1,0 +1,18 @@
+# DEMO ONLY profile for the presenter-driven X-ray console: start the gate-service with SPRING_PROFILES_ACTIVE=demo.
+# Spring reads this file on top of application.yml. Never for a real gate; the tests use the defaults.
+
+demo:
+  xray: true                      # enables /v1/demo/** and per-candidate scores in gate-event responses
+
+# A faster identity breaker so the 15-probe script fits: with a window of 2 calls, one failure after a success
+# is 50% and opens it. Tested default: window 10, minimum 5, 10 s open, 2 half-open calls.
+resilience4j.circuitbreaker.instances.identity:
+  sliding-window-size: 2
+  minimum-number-of-calls: 2
+  wait-duration-in-open-state: 5s
+  permitted-number-of-calls-in-half-open-state: 1
+
+gate:
+  retention:
+    grace: 3s                     # purge a few seconds after "depart"
+    purge-interval: 2s

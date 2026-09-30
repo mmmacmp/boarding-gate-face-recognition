@@ -9,16 +9,23 @@ const DATA = path.join(ROOT, 'data')
 const PYTHON = path.join(ROOT, '.venv', 'Scripts', 'python.exe')
 
 /**
- * The only captures the console may fetch: an allowlist, never an arbitrary path.
- * Volunteer photos may be displayed; synthetic (DigiFace) ones are only ever sent to the gate, never shown.
+ * The only captures the console may fetch: an allowlist of the DEMO01 script's probes, never an arbitrary path.
+ * Synthetic ones (DigiFace-1M, research licence) are shown with an attribution line in the page footer.
  */
+const PROBES = {
+  'p001-easy': ['volunteers/P001', 'probe'],
+  'p001-hard': ['volunteers/P001', 'probe_02'],
+  s01: ['demo/S01', 'probe'],
+  s02: ['demo/S02', 'probe'],
+  s03: ['demo/S03', 'probe'],
+  stranger: ['synthetic/STRANGER', 'probe'],
+  'no-face': ['demo/special', 'no_face'],
+  'two-faces': ['demo/special', 'two_faces'],
+  'tiny-face': ['demo/special', 'tiny_face'],
+}
+
 function probeFile(name) {
-  const known = {
-    'p001-easy': ['volunteers/P001', 'probe'],
-    'p001-hard': ['volunteers/P001', 'probe_02'],
-    stranger: ['synthetic/STRANGER', 'probe'],
-  }
-  const [dir, stem] = known[name] ?? (/^S\d{3}$/.test(name) ? [`synthetic/${name}`, 'probe'] : [])
+  const [dir, stem] = PROBES[name] ?? []
   if (!dir) return null
   const folder = path.join(DATA, dir)
   const file = fs.existsSync(folder) && fs.readdirSync(folder).find((f) => path.parse(f).name === stem)
@@ -39,12 +46,13 @@ function demoTools() {
         res.setHeader('Content-Type', 'image/jpeg')
         fs.createReadStream(file).pipe(res)
       })
-      server.middlewares.use('/demo/reset', (req, res) => {
+      // Fast reset of the 5-passenger DEMO01 flight only (POC001/POC002 untouched).
+      server.middlewares.use('/demo/reset-flight', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405
           return res.end()
         }
-        execFile(PYTHON, ['tools/demo_scenario.py', '--reset'], { cwd: ROOT }, (error, stdout, stderr) => {
+        execFile(PYTHON, ['tools/demo_scenario.py', '--reset-demo-flight'], { cwd: ROOT }, (error, stdout, stderr) => {
           res.setHeader('Content-Type', 'application/json')
           res.statusCode = error ? 500 : 200
           res.end(JSON.stringify({ ok: !error, output: (error ? stderr : stdout).trim() }))

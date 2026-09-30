@@ -118,17 +118,18 @@ public class GalleryService {
     }
 
     /**
-     * Exact 1:N search over the matchable gallery; returns the best two candidates.
-     * Templates are decrypted per request and not cached, so plaintext only lives for the duration of one event.
+     * Exact 1:N search over the matchable gallery; returns every candidate, best first (the policy uses the top two;
+     * the demo X-ray view shows them all). Templates are decrypted per request and not cached, so plaintext only
+     * lives for the duration of one event.
      */
-    public List<Candidate> searchTop2(Flight flight, String modelId, float[] probe) {
+    public List<Candidate> search(Flight flight, String modelId, float[] probe) {
         SecretKey dek = crypto.unwrap(flight.getWrappedDek());
         List<Candidate> scored = new ArrayList<>();
         for (GalleryEntry entry : entries.findMatchable(flight.getFlightId(), modelId)) {
             float[] template = crypto.decrypt(dek, entry.encrypted(), entry.aad());
             scored.add(new Candidate(entry.getId(), entry.getProfileId(), dot(probe, template)));
         }
-        return scored.stream().sorted(Comparator.comparingDouble(Candidate::score).reversed()).limit(2).toList();
+        return scored.stream().sorted(Comparator.comparingDouble(Candidate::score).reversed()).toList();
     }
 
     /** Both vectors are L2-normalised by the model-service, so the dot product is the cosine similarity. */

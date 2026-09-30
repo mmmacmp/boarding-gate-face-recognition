@@ -11,18 +11,22 @@ Flights:
 
 Every reference is EXIF-stripped before upload and, if the model-service is reachable, checked for exactly one face
 >= 150 px. Resets the mocks first. If the gate-service is reachable, records consents and builds both galleries.
-Usage: python tools/seed.py [--twin-from-photo] [--no-synthetic]
+  DEMO01  presenter demo flight (5 passengers): P001, P001-TWIN (simulated) and S01-S03 from data/demo/
+          (tools/make_demo_assets.py). Also uploads face-centred thumbnails to mock-idp for the X-ray console.
+Usage: python tools/seed.py [--twin-from-photo] [--no-synthetic] [--demo-only]
 """
 import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import cv2
 import httpx
+import numpy as np
 
 from photos import REFERENCE_MIN_FACE_PX, clean_jpeg, discover_volunteers, simulated_lookalike
 
 ROOT = Path(__file__).resolve().parents[1]
-MAIN_FLIGHT, TWIN_FLIGHT = "POC001", "POC002"
+MAIN_FLIGHT, TWIN_FLIGHT, DEMO_FLIGHT = "POC001", "POC002", "DEMO01"
 NON_CONSENTED = "P900"
 
 
@@ -63,6 +67,38 @@ def put_manifest(mocks: httpx.Client, flight_id: str, profile_ids: list[str]) ->
     print(f"{flight_id}: departure {departure.isoformat()}, manifest of {len(profile_ids)}: {shown}")
 
 
+def thumbnail(model_service: httpx.Client, data: bytes) -> bytes:
+    """240 px square crop around the detected face (the reference itself stays at the identity provider)."""
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    h, w = img.shape[:2]
+    faces = model_service.post("/v1/embed", content=data, headers={"Content-Type": "image/jpeg"}).json()["faces"]
+    x1, y1, x2, y2 = faces[0]["bbox"] if faces else (0, 0, w, h)
+    side = int(min(max(x2 - x1, y2 - y1) * 1.7, w, h))
+    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    left = int(min(max(cx - side / 2, 0), w - side))
+    top = int(min(max(cy - side / 2, 0), h - side))
+    crop = cv2.resize(img[top:top + side, left:left + side], (240, 240), interpolation=cv2.INTER_AREA)
+    return cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 88])[1].tobytes()
+
+
+def seed_demo_flight(mocks: httpx.Client, model_service: httpx.Client, gate_url: str, data_dir: Path) -> None:
+    """DEMO01: exactly 5 passengers for the presenter-driven X-ray console. Safe to re-run (no mock-idp reset)."""
+    p001 = next((v for v in discover_volunteers(data_dir) if v.profile_id == "P001" and v.reference), None)
+    demo = [v for v in discover_volunteers(data_dir, "demo") if v.reference]
+    if p001 is None or len(demo) != 3:
+        print("DEMO01 skipped: needs data/volunteers/P001 and data/demo/S01-S03 (python tools/make_demo_assets.py)")
+        return
+    references = {"P001": clean_jpeg(p001.reference), "P001-TWIN": simulated_lookalike(p001.reference)}
+    references |= {v.profile_id: clean_jpeg(v.reference) for v in demo}
+    for pid, data in references.items():
+        mocks.put(f"/admin/profiles/{pid}/reference-image", content=data,
+                  headers={"Content-Type": "image/jpeg"}).raise_for_status()
+        mocks.put(f"/admin/profiles/{pid}/status", json={"status": "VALID"}).raise_for_status()
+        mocks.put(f"/admin/profiles/{pid}/thumbnail", content=thumbnail(model_service, data)).raise_for_status()
+    put_manifest(mocks, DEMO_FLIGHT, list(references))
+    seed_gate_service(gate_url, list(references), [DEMO_FLIGHT])
+
+
 def seed_gate_service(url: str, consenting: list[str], flights: list[str]) -> None:
     with httpx.Client(base_url=url, timeout=120) as gate:
         try:
@@ -86,7 +122,13 @@ def main():
     ap.add_argument("--data", type=Path, default=ROOT / "data")
     ap.add_argument("--twin-from-photo", action="store_true", help="use reference_twin.* instead of the simulation")
     ap.add_argument("--no-synthetic", action="store_true")
+    ap.add_argument("--demo-only", action="store_true", help="(re)seed only the 5-passenger DEMO01 flight")
     args = ap.parse_args()
+
+    if args.demo_only:
+        with httpx.Client(base_url=args.mocks, timeout=10) as mocks:
+            seed_demo_flight(mocks, connect_model_service(args.model_service), args.gate_service, args.data)
+        return
 
     volunteers = [v for v in discover_volunteers(args.data) if v.reference]
     synthetic = [] if args.no_synthetic else [v for v in discover_volunteers(args.data, "synthetic") if v.reference]
@@ -127,8 +169,10 @@ def main():
         put_manifest(mocks, MAIN_FLIGHT, [v.profile_id for v in volunteers + synthetic] + [NON_CONSENTED])
         if twins:
             put_manifest(mocks, TWIN_FLIGHT, twins)
-    print(f"mock-idp: {len(references)} reference images (EXIF stripped)")
-    seed_gate_service(args.gate_service, sorted(references), [MAIN_FLIGHT] + ([TWIN_FLIGHT] if twins else []))
+        print(f"mock-idp: {len(references)} reference images (EXIF stripped)")
+        seed_gate_service(args.gate_service, sorted(references), [MAIN_FLIGHT] + ([TWIN_FLIGHT] if twins else []))
+        if model_service is not None:
+            seed_demo_flight(mocks, model_service, args.gate_service, args.data)
 
 
 if __name__ == "__main__":

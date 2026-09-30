@@ -4,6 +4,7 @@ Hypothetical API invented for this POC; it does not model any real system's inte
 It holds reference images (the identity anchor), answers a 1:1 confirmation, and supports fault injection.
 """
 import asyncio
+import os
 import random
 from typing import Literal
 
@@ -43,6 +44,7 @@ def reset():
     global _faults
     _faults = Faults()
     _profiles.clear()
+    _thumbnails.clear()
 
 
 async def apply_faults():
@@ -57,6 +59,27 @@ async def apply_faults():
 
 router = APIRouter(tags=["mock-idp"], dependencies=[Depends(apply_faults)])
 admin = APIRouter(prefix="/admin", tags=["mock-idp admin"])
+demo = APIRouter(tags=["mock-idp demo"])  # no fault dependency: thumbnails stay visible while "down" is injected
+_thumbnails: dict[str, bytes] = {}  # profile_id -> small JPEG, uploaded by tools/seed.py
+
+
+def xray_enabled() -> bool:
+    """DEMO ONLY switch (env DEMO_XRAY=true). Read on every call so tests can flip it."""
+    return os.getenv("DEMO_XRAY", "false").lower() == "true"
+
+
+@demo.get("/v1/demo/profiles/{profile_id}/thumbnail")
+def thumbnail(profile_id: str) -> Response:
+    """Small reference thumbnail for the X-ray console. Reference images live at the identity provider, so the
+    console gets them from here, never from the gate-service. 404 unless DEMO_XRAY=true."""
+    if not xray_enabled() or profile_id not in _thumbnails:
+        raise HTTPException(404, "not found")
+    return Response(content=_thumbnails[profile_id], media_type="image/jpeg")
+
+
+@admin.put("/profiles/{profile_id}/thumbnail", status_code=204)
+async def put_thumbnail(profile_id: str, request: Request):
+    _thumbnails[profile_id] = await request.body()
 
 
 @router.get("/v1/profiles/{profile_id}/reference-image")

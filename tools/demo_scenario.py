@@ -29,6 +29,22 @@ def reset_demo(mocks_url: str = "http://localhost:8002", model_url: str = "http:
     subprocess.run([sys.executable, str(ROOT / "tools" / "seed.py")], check=True, stdout=subprocess.DEVNULL)
 
 
+DEMO_FLIGHT_SQL = ("DELETE FROM gallery_entry WHERE flight_id = 'DEMO01'; DELETE FROM gate_event WHERE flight_id = 'DEMO01'; "
+                   "DELETE FROM audit_log WHERE flight_id = 'DEMO01'; DELETE FROM flight WHERE flight_id = 'DEMO01'")
+
+
+def reset_demo_flight(gate_url: str = "http://localhost:8081", mocks_url: str = "http://localhost:8002",
+                      model_url: str = "http://localhost:8001") -> None:
+    """Fast reset (~3 s) of the 5-passenger DEMO01 flight only; POC001/POC002 stay as they are.
+    Used by the X-ray console's reset button: python tools/demo_scenario.py --reset-demo-flight"""
+    subprocess.run(COMPOSE + [DEMO_FLIGHT_SQL], capture_output=True, text=True, check=True)
+    httpx.post(f"{mocks_url}/admin/faults", json={}).raise_for_status()
+    httpx.post(f"{model_url}/admin/faults", json={}).raise_for_status()
+    httpx.post(f"{gate_url}/v1/demo/breakers/reset")  # demo profile only; 404 otherwise, which is fine
+    subprocess.run([sys.executable, str(ROOT / "tools" / "seed.py"), "--demo-only"], check=True,
+                   stdout=subprocess.DEVNULL)
+
+
 class Demo:
     def __init__(self, gate_url: str, mocks_url: str, data: Path):
         self.gate = httpx.Client(base_url=gate_url, timeout=10)
@@ -119,5 +135,8 @@ def run_demo(gate_url: str, mocks_url: str, data: Path) -> None:
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["--reset"]:
-    reset_demo()  # the console's "reset demo" button calls this
-    print("reset done: empty database, no faults, POC001 + POC002 seeded")
+    reset_demo()
+    print("reset done: empty database, no faults, POC001 + POC002 + DEMO01 seeded")
+elif __name__ == "__main__" and sys.argv[1:] == ["--reset-demo-flight"]:
+    reset_demo_flight()  # the X-ray console's reset button calls this
+    print("DEMO01 reset: 5 passengers waiting, consents active, no faults, breakers closed")

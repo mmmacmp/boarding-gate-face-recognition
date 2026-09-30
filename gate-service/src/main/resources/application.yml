@@ -70,3 +70,7 @@ gate:
   retention:
     grace: 2m                     # after departure, before templates are crypto-shredded (short for the demo)
     purge-interval: 30s
+
+demo:
+  xray: false                     # DEMO ONLY: X-ray endpoints + per-candidate scores (see application-demo.yml)
+  synthetic-id-prefix: S          # profile ids starting with this are synthetic (DigiFace) passengers
