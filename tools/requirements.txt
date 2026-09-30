@@ -1,1 +1,2 @@
 httpx
+opencv-python==5.0.0.93

@@ -16,6 +16,7 @@ class Settings:
     det_size: int = 640          # detector input size in pixels
     max_image_bytes: int = 5 * 1024 * 1024
     models_dir: Path = DEFAULT_MODELS_DIR
+    min_face_px: int = 80        # faces narrower than this are ignored (background people outside the gate zone)
 
     def __post_init__(self):
         """Reject unknown device or model names even when Settings is built directly."""
@@ -38,4 +39,5 @@ def load_settings() -> Settings:
         det_size=int(os.getenv("DET_SIZE", "640")),
         max_image_bytes=int(os.getenv("MAX_IMAGE_BYTES", str(5 * 1024 * 1024))),
         models_dir=Path(os.getenv("MODELS_DIR", str(DEFAULT_MODELS_DIR))),
+        min_face_px=int(os.getenv("MIN_FACE_PX", "80")),
     )

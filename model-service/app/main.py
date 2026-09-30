@@ -1,7 +1,7 @@
 """model-service: stateless face detection + embedding. Stands in for a vendor matcher SDK.
 
 It never sees identities, never stores or logs images or embeddings. The gate-service owns every decision.
-Run: uvicorn app.main:app --port 8001   (switches: DEVICE=cuda|cpu, MODEL=r50|sface, CPU_THREADS=4)
+Run: uvicorn app.main:app --port 8001   (switches: DEVICE=cuda|cpu, MODEL=r50|sface, CPU_THREADS=4, MIN_FACE_PX=80)
 """
 import logging
 import threading
@@ -59,7 +59,9 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
         b = state["backend"]
         with lock:
             t0 = time.perf_counter()
-            faces = b.detect(img)
+            # Faces narrower than MIN_FACE_PX are people outside the gate zone: drop them before the one-face
+            # rule, so they neither cause MULTI_FACE nor get reported or embedded.
+            faces = [f for f in b.detect(img) if f.bbox[2] - f.bbox[0] >= settings.min_face_px]
             t1 = time.perf_counter()
             # Data minimisation: only compute a template when there is exactly one face.
             # With 0 or 2+ faces the gate goes to manual anyway, so bystanders' templates are never computed.

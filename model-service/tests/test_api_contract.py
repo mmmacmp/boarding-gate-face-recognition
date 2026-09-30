@@ -12,12 +12,12 @@ from conftest import blank_image
 class FakeBackend:
     model_id, dim, device, providers = "fake", 4, "cpu", ["fake"]
 
-    def __init__(self, n_faces: int):
-        self.n_faces = n_faces
+    def __init__(self, n_faces: int = 0, widths: list[int] | None = None):
+        self.widths = widths if widths is not None else [200] * n_faces  # face widths in pixels
         self.embed_calls = 0
 
     def detect(self, img):
-        return [Face(bbox=[0, 0, 10, 10], det_score=0.9, landmarks=np.zeros(1)) for _ in range(self.n_faces)]
+        return [Face(bbox=[0, 0, w, w], det_score=0.9, landmarks=np.zeros(1)) for w in self.widths]
 
     def embed(self, img, face):
         self.embed_calls += 1
@@ -30,6 +30,22 @@ class FakeBackend:
 def client_with(n_faces: int, **settings) -> tuple[TestClient, FakeBackend]:
     backend = FakeBackend(n_faces)
     return TestClient(create_app(Settings(**settings), backend=backend)), backend
+
+
+@pytest.mark.parametrize("widths, min_face_px, expected_faces, expect_embedding", [
+    ([200, 40], 80, 1, True),     # passenger + small background face -> one face, embedded
+    ([40, 60], 80, 0, False),     # only background faces -> no face
+    ([200, 150], 80, 2, False),   # two faces in the zone -> still MULTI_FACE territory
+    ([200, 40], 0, 2, False),     # MIN_FACE_PX=0 disables the filter
+    ([80], 80, 1, True),          # boundary: exactly MIN_FACE_PX is kept
+])
+def test_min_face_px_ignores_small_faces(widths, min_face_px, expected_faces, expect_embedding):
+    backend = FakeBackend(widths=widths)
+    client = TestClient(create_app(Settings(min_face_px=min_face_px), backend=backend))
+    faces = client.post("/v1/embed", content=blank_image()).json()["faces"]
+    assert len(faces) == expected_faces
+    assert all(f["bbox"][2] - f["bbox"][0] >= min_face_px for f in faces)  # small faces are not even reported
+    assert (backend.embed_calls == 1) == expect_embedding
 
 
 @pytest.mark.parametrize("n_faces, expect_embedding", [(0, False), (1, True), (2, False), (3, False)])

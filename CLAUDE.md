@@ -129,9 +129,9 @@ spikes/ (only if the Day-1 checkpoint triggers)
 ## Commands (fill in as they are created)
 - Python env (once, repo root, Python 3.11): `py -3.11 -m venv .venv`; `.\.venv\Scripts\pip install -r model-service/requirements.txt -r mocks/requirements.txt -r tools/requirements.txt`; then swap ONNX Runtime as described at the top of `model-service/requirements.txt`; `cd model-service; python download_models.py`
 - Postgres: `docker compose -f ops/docker-compose.yml up -d --wait db` (host port **5433**, db `gate`, test db `gate_test`, user/password `poc`; 5432 is taken by a local PostgreSQL service)
-- model-service (GPU): `cd model-service; $env:DEVICE="cuda"; uvicorn app.main:app --port 8001` (also `MODEL=sface`, `CPU_THREADS=4`); tests: `python -m pytest`
+- model-service (GPU): `cd model-service; $env:DEVICE="cuda"; uvicorn app.main:app --port 8001` (also `MODEL=sface`, `CPU_THREADS=4`, `MIN_FACE_PX=80`); tests: `python -m pytest`
 - mocks: `cd mocks; uvicorn main:app --port 8002`; tests: `python -m pytest`
-- gate-service: `cd gate-service; mvn spring-boot:run` (port 8080); tests: `mvn verify` (JaCoCo report in `target/site/jacoco`)
+- gate-service: `cd gate-service; .\mvnw.cmd spring-boot:run` (port **8081**: 8080 is taken by a local Apache httpd, don't touch it); unit tests: `.\mvnw.cmd test` (no DB); all tests: `.\mvnw.cmd verify` (needs the compose DB; JaCoCo report in `target/site/jacoco`)
 - Seed and scenarios: `python tools/seed.py`, then `python tools/gate_sim.py --scenario demo`
 - Latency: `python tools/bench_latency.py --device cuda|cpu|cpu4`
 

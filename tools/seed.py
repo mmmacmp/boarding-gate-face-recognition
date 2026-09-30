@@ -1,14 +1,14 @@
-"""Seed the MOCK external systems for flight POC001 from local, consenting volunteers' photos.
+"""Seed the MOCK external systems from local, consenting volunteers' photos (see data/README-consent.md).
 
-Reads data/volunteers/<profile_id>/reference.jpg (see data/README-consent.md) and:
-  - uploads each reference image to mock-idp (the identity anchor),
-  - puts a manifest for the flight into dcs-stub, plus one passenger (P900) who never consents.
-data/volunteers/<id>/reference_twin.jpg, if present, is enrolled as a SECOND profile "<id>-TWIN": a labelled
-SIMULATION of look-alikes (same person, two identities) for the AMBIGUOUS demo scene.
+Flights:
+  POC001  main demo flight: every volunteer + P900 (on the manifest, never consents, must never reach the gallery)
+  POC002  twin demo flight: each volunteer that has reference_twin.* is also enrolled as "<id>-TWIN", a labelled
+          SIMULATION of look-alikes (same person, two identities). Kept off POC001 so normal boarding stays clean.
 
-Resets the mocks first (profiles, manifests and any injected faults). Step 3 extends this script to create consents
-and build the gallery in the gate-service.
-Usage: python tools/seed.py [--mocks http://localhost:8002] [--flight POC001]
+For every reference image: EXIF is stripped (decode + re-encode) before upload, and, if the model-service is
+reachable, the face is checked (exactly one face, width >= 150 px). Probes are checked too, for information.
+Resets the mocks first (profiles, manifests and injected faults).
+Usage: python tools/seed.py [--mocks http://localhost:8002] [--model-service http://localhost:8001]
 """
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -16,46 +16,84 @@ from pathlib import Path
 
 import httpx
 
+from photos import REFERENCE_MIN_FACE_PX, clean_jpeg, discover_volunteers
+
 ROOT = Path(__file__).resolve().parents[1]
-NON_CONSENTED = "P900"  # on the manifest but never consents: must never reach the gallery
+MAIN_FLIGHT, TWIN_FLIGHT = "POC001", "POC002"
+NON_CONSENTED = "P900"
 
 
-def discover_profiles(data_dir: Path) -> dict[str, Path]:
-    profiles = {}
-    for folder in sorted((data_dir / "volunteers").glob("*")):
-        if (folder / "reference.jpg").exists():
-            profiles[folder.name] = folder / "reference.jpg"
-        if (folder / "reference_twin.jpg").exists():
-            profiles[f"{folder.name}-TWIN"] = folder / "reference_twin.jpg"
-    return profiles
+def check_face(model_service: httpx.Client | None, label: str, data: bytes, min_px: int | None) -> None:
+    """Print face count and width; warn when an image would not work as an enrolment photo."""
+    if model_service is None:
+        return
+    faces = model_service.post("/v1/embed", content=data, headers={"Content-Type": "image/jpeg"}).json()["faces"]
+    widths = [round(f["bbox"][2] - f["bbox"][0]) for f in faces]
+    problem = ""
+    if len(faces) != 1:
+        problem = f"  <-- WARNING: expected exactly 1 face, found {len(faces)}"
+    elif min_px and widths[0] < min_px:
+        problem = f"  <-- WARNING: face {widths[0]} px < {min_px} px minimum"
+    print(f"  {label:32s} faces={len(faces)} width_px={widths}{problem}")
+
+
+def connect_model_service(url: str) -> httpx.Client | None:
+    client = httpx.Client(base_url=url, timeout=10)
+    try:
+        client.get("/health").raise_for_status()
+        return client
+    except httpx.HTTPError:
+        print(f"model-service not reachable at {url}: face checks skipped")
+        return None
+
+
+def put_manifest(mocks: httpx.Client, flight_id: str, profile_ids: list[str]) -> None:
+    departure = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)
+    passengers = [{"profile_id": pid, "seat": f"{10 + i}A"} for i, pid in enumerate(profile_ids)]
+    mocks.put(f"/admin/flights/{flight_id}/manifest", json={
+        "flight_id": flight_id, "departure_time": departure.isoformat(), "passengers": passengers,
+    }).raise_for_status()
+    print(f"{flight_id}: departure {departure.isoformat()}, manifest {profile_ids}")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mocks", default="http://localhost:8002")
-    ap.add_argument("--flight", default="POC001")
+    ap.add_argument("--model-service", default="http://localhost:8001")
     ap.add_argument("--data", type=Path, default=ROOT / "data")
     args = ap.parse_args()
 
-    profiles = discover_profiles(args.data)
-    if not profiles:
-        print(f"WARNING: no photos in {args.data / 'volunteers'}; seeding the manifest with {NON_CONSENTED} only")
+    volunteers = discover_volunteers(args.data)
+    if not volunteers:
+        print(f"WARNING: no volunteers in {args.data / 'volunteers'}")
+    model_service = connect_model_service(args.model_service)
+    references: dict[str, bytes] = {}  # profile_id -> EXIF-free JPEG bytes
 
-    with httpx.Client(base_url=args.mocks, timeout=10) as c:
-        c.post("/admin/reset").raise_for_status()
-        for pid, path in profiles.items():
-            c.put(f"/admin/profiles/{pid}/reference-image", content=path.read_bytes(),
-                  headers={"Content-Type": "image/jpeg"}).raise_for_status()
-        passengers = [{"profile_id": pid, "seat": f"{10 + i}A"} for i, pid in enumerate(profiles)]
-        passengers.append({"profile_id": NON_CONSENTED, "seat": "30C"})
-        departure = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)
-        c.put(f"/admin/flights/{args.flight}/manifest", json={
-            "flight_id": args.flight, "departure_time": departure.isoformat(), "passengers": passengers,
-        }).raise_for_status()
+    print("checking photos:")
+    for v in volunteers:
+        if v.reference is None:
+            print(f"  {v.profile_id}: no reference.* photo, skipped")
+            continue
+        references[v.profile_id] = clean_jpeg(v.reference)
+        check_face(model_service, f"{v.profile_id} {v.reference.name}", references[v.profile_id], REFERENCE_MIN_FACE_PX)
+        if v.twin_reference:
+            references[f"{v.profile_id}-TWIN"] = clean_jpeg(v.twin_reference)
+            check_face(model_service, f"{v.profile_id}-TWIN {v.twin_reference.name}",
+                       references[f"{v.profile_id}-TWIN"], REFERENCE_MIN_FACE_PX)
+        for probe in v.probes:
+            check_face(model_service, f"{v.profile_id} {probe.name} (probe)", clean_jpeg(probe), None)
 
-    print(f"seeded {args.flight}: departure {departure.isoformat()}, "
-          f"{len(profiles)} profiles with reference images {sorted(profiles)}, manifest size {len(passengers)} "
-          f"(incl. non-consenting {NON_CONSENTED})")
+    with httpx.Client(base_url=args.mocks, timeout=10) as mocks:
+        mocks.post("/admin/reset").raise_for_status()
+        for pid, data in references.items():
+            mocks.put(f"/admin/profiles/{pid}/reference-image", content=data,
+                      headers={"Content-Type": "image/jpeg"}).raise_for_status()
+        people = [pid for pid in references if not pid.endswith("-TWIN")]
+        twins = [pid for pid in references if pid.endswith("-TWIN")]
+        put_manifest(mocks, MAIN_FLIGHT, people + [NON_CONSENTED])
+        if twins:
+            put_manifest(mocks, TWIN_FLIGHT, [t.removesuffix("-TWIN") for t in twins] + twins)
+    print(f"mock-idp reference images: {sorted(references)} (EXIF stripped)")
 
 
 if __name__ == "__main__":
