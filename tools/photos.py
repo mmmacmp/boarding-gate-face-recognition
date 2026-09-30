@@ -3,7 +3,8 @@
 Layout per volunteer (see data/README-consent.md); .jpg, .jpeg and .png are all accepted:
   reference.*          enrolment photo, served by mock-idp
   probe.*, probe_02.*  gate captures (easy, hard, ...), sorted by name
-  reference_twin.*     optional: enrolled as "<id>-TWIN" on the separate twin demo flight (a simulation)
+  reference_twin.*     optional second photo; only used with seed.py --twin-from-photo (reproduces a finding)
+data/synthetic/ uses the same layout (S001 ... S049, plus STRANGER with probes only).
 """
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,9 +28,10 @@ def _images(folder: Path) -> list[Path]:
     return sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
 
 
-def discover_volunteers(data_dir: Path) -> list[Volunteer]:
+def discover_volunteers(data_dir: Path, subdir: str = "volunteers") -> list[Volunteer]:
+    """Profiles under data/<subdir>/ ("volunteers" = consenting people, "synthetic" = DigiFace-1M subset)."""
     volunteers = []
-    for folder in sorted(p for p in (data_dir / "volunteers").glob("*") if p.is_dir()):
+    for folder in sorted(p for p in (data_dir / subdir).glob("*") if p.is_dir()):
         v = Volunteer(profile_id=folder.name)
         for img in _images(folder):
             if img.stem == "reference":
@@ -38,8 +40,32 @@ def discover_volunteers(data_dir: Path) -> list[Volunteer]:
                 v.twin_reference = img
             elif img.stem == "probe" or img.stem.startswith("probe_"):
                 v.probes.append(img)
-        volunteers.append(v)
+        if v.reference or v.probes:  # skips helper folders such as synthetic/raw
+            volunteers.append(v)
     return volunteers
+
+
+def find_profile(data_dir: Path, profile_id: str) -> Volunteer | None:
+    for subdir in ("volunteers", "synthetic"):
+        for v in discover_volunteers(data_dir, subdir):
+            if v.profile_id == profile_id:
+                return v
+    return None
+
+
+def simulated_lookalike(reference: Path) -> bytes:
+    """SIMULATED look-alike for the AMBIGUOUS demo: a re-cropped, re-compressed copy of a real reference.
+
+    Same person, same capture domain, so a probe scores almost equally against both profiles and the margin rule
+    deterministically returns AMBIGUOUS. It is labelled as a simulation everywhere; it is not a real look-alike.
+    """
+    img = cv2.imdecode(np.fromfile(str(reference), np.uint8), cv2.IMREAD_COLOR)
+    h, w = img.shape[:2]
+    dy, dx = h // 25, w // 25                      # trim 4% from each side
+    ok, buf = cv2.imencode(".jpg", img[dy:h - dy, dx:w - dx], [cv2.IMWRITE_JPEG_QUALITY, 70])
+    if not ok:
+        raise ValueError(f"could not re-encode: {reference}")
+    return buf.tobytes()
 
 
 def clean_jpeg(path: Path) -> bytes:

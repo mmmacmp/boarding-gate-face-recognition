@@ -2,6 +2,7 @@
 
   python tools/gate_sim.py --profile P001                 # all of P001's probes (probe.*, probe_02.*, ...)
   python tools/gate_sim.py --profile P001 --probe 2       # only the 2nd probe (e.g. the hard, night capture)
+  python tools/gate_sim.py --profile STRANGER --probe 1   # synthetic identity that is never enrolled
   python tools/gate_sim.py --image path/to/capture.jpg    # any consenting person's photo
   python tools/gate_sim.py --profile P001 --probe 1 --key same-key   # repeat an Idempotency-Key
 
@@ -15,7 +16,7 @@ from pathlib import Path
 
 import httpx
 
-from photos import clean_jpeg, discover_volunteers
+from photos import clean_jpeg, find_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,7 +42,7 @@ def main():
     ap.add_argument("--gate-service", default="http://localhost:8081")
     ap.add_argument("--gate", default="G1")
     ap.add_argument("--flight", default="POC001")
-    ap.add_argument("--profile", help="volunteer folder name under data/volunteers")
+    ap.add_argument("--profile", help="folder name under data/volunteers or data/synthetic")
     ap.add_argument("--probe", type=int, help="1-based probe number (default: all probes)")
     ap.add_argument("--image", type=Path, help="send this image instead of a volunteer probe")
     ap.add_argument("--key", help="Idempotency-Key (default: a new UUID per capture)")
@@ -51,9 +52,9 @@ def main():
     if args.image:
         captures = [args.image]
     elif args.profile:
-        volunteer = next((v for v in discover_volunteers(args.data) if v.profile_id == args.profile), None)
+        volunteer = find_profile(args.data, args.profile)  # data/volunteers/ first, then data/synthetic/
         if volunteer is None or not volunteer.probes:
-            raise SystemExit(f"no probes for {args.profile} in {args.data / 'volunteers'}")
+            raise SystemExit(f"no probes for {args.profile} in {args.data}/volunteers or /synthetic")
         captures = volunteer.probes if args.probe is None else [volunteer.probes[args.probe - 1]]
     else:
         raise SystemExit("give --profile or --image")
