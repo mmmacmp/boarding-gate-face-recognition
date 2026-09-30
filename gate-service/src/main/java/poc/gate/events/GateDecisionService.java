@@ -91,9 +91,12 @@ public class GateDecisionService {
         if (!probe.modelId().equals(flight.getModelId())) {
             return Decision.manual(ReasonCode.MODEL_MISMATCH); // never compare templates from different models
         }
-        List<Candidate> top2 = probe.faceCount() == 1
-                ? gallery.searchTop2(flight, probe.modelId(), probe.embedding())
-                : List.of();
+        List<Candidate> top2 = List.of();
+        if (probe.faceCount() == 1) {
+            long start = System.nanoTime();
+            top2 = gallery.searchTop2(flight, probe.modelId(), probe.embedding());
+            metrics.recordSearch(Duration.ofNanos(System.nanoTime() - start));
+        }
         Decision decision = policy.decide(probe.faceCount(), probe.modelId(), top2);
         if (decision.isBoard() && !identity.isValid(decision.profileId(), flightId)) {
             return decision.toManual(ReasonCode.IDP_REJECTED);

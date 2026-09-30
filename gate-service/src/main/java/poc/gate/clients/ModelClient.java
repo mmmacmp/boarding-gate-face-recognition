@@ -7,14 +7,20 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import poc.gate.config.GateProperties;
 import poc.gate.decision.ReasonCode;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** Calls the stateless model-service. It never sends an identity, only image bytes. */
 @Component
 public class ModelClient {
 
+    // JSON field names are snake_case (model_id, det_score) like the Python services. Set per record, not globally,
+    // so Spring's own JSON (e.g. /actuator/circuitbreakers) keeps its standard camelCase names.
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Face(List<Double> bbox, double detScore, float[] embedding) {
     }
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record EmbedResponse(String modelId, int dim, List<Face> faces) {
 
         public int faceCount() {

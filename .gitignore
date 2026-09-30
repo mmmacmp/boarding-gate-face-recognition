@@ -33,3 +33,6 @@ Thumbs.db
 # Model files (downloaded, licences vary)
 *.onnx
 model-service/models/
+
+# Generated charts (scores only, no faces) are allowed
+!docs/img/*.png

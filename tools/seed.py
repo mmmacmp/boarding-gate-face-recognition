@@ -27,10 +27,10 @@ NON_CONSENTED = "P900"
 
 
 def check_face(model_service: httpx.Client | None, label: str, data: bytes, min_px: int | None,
-               quiet: bool = False) -> None:
-    """Print face count and width; warn when an image would not work as an enrolment photo."""
+               quiet: bool = False) -> bool:
+    """Print face count and width; warn and return False when an image would not work as an enrolment photo."""
     if model_service is None:
-        return
+        return True
     faces = model_service.post("/v1/embed", content=data, headers={"Content-Type": "image/jpeg"}).json()["faces"]
     widths = [round(f["bbox"][2] - f["bbox"][0]) for f in faces]
     problem = ""
@@ -40,6 +40,7 @@ def check_face(model_service: httpx.Client | None, label: str, data: bytes, min_
         problem = f"  <-- WARNING: face {widths[0]} px < {min_px} px minimum"
     if problem or not quiet:
         print(f"  {label:36s} faces={len(faces)} width_px={widths}{problem}")
+    return not problem
 
 
 def connect_model_service(url: str) -> httpx.Client | None:
@@ -96,9 +97,14 @@ def main():
 
     print("checking reference photos (synthetic ones only if there is a problem):")
     for v in volunteers + synthetic:
-        references[v.profile_id] = clean_jpeg(v.reference)
-        check_face(model_service, f"{v.profile_id} {v.reference.name}", references[v.profile_id],
-                   REFERENCE_MIN_FACE_PX, quiet=v in synthetic)
+        data = clean_jpeg(v.reference)
+        ok = check_face(model_service, f"{v.profile_id} {v.reference.name}", data, REFERENCE_MIN_FACE_PX,
+                        quiet=v in synthetic)
+        if not ok and v in synthetic:
+            print(f"  -> {v.profile_id} excluded: synthetic references must pass the enrolment check")  # e.g. S035
+            continue
+        references[v.profile_id] = data
+    synthetic = [v for v in synthetic if v.profile_id in references]
 
     twins = []
     if volunteers:

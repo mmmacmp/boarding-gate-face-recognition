@@ -94,3 +94,12 @@ line, delete or simplify it.
 | `AbstractGateIT` | `@SpringBootTest`; `@DynamicPropertySource`; WireMock as a fake HTTP server; unique ids instead of DB cleanup | |
 | `BoardingIT`, `ResilienceIT`, `RetentionIT` | one test per failure-mode row; the two-gate race with a latch; `OutputCaptureExtension` for "no identity in logs" | |
 | `ApiExceptionHandlerTest` | `@WebMvcTest` (web layer only) + `@MockitoBean` | |
+
+## Step 5: small Java changes
+
+| Item | Concepts to cover | Your explanation |
+|---|---|---|
+| `@JsonNaming(SnakeCaseStrategy)` on each JSON record | Jackson 3 (`tools.jackson`); why per record instead of the global `spring.jackson.property-naming-strategy` (the global one also renamed actuator JSON) | |
+| `GateMetrics.recordSearch` + `gate.gallery.search` timer | cost of "no plaintext cache" (unwrap DEK + DB read + decrypt + dot products); `publishPercentiles(0.5, 0.95)` | |
+| `application.yml` R50 threshold 0.44 | where it came from (`tools/score_analysis.py`), why it is still illustrative, the FNMR it costs | |
+| `pom.xml` Mockito `-javaagent` | `maven-dependency-plugin:properties`; `@{argLine}` keeps the JaCoCo agent | |

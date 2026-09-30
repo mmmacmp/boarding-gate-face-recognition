@@ -7,14 +7,18 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import poc.gate.config.GateProperties;
 import poc.gate.decision.ReasonCode;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** Calls dcs-stub, the MOCK departure control system, for the flight manifest. */
 @Component
 public class DcsClient {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Passenger(String profileId, String seat) {
     }
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Manifest(String flightId, Instant departureTime, List<Passenger> passengers) {
     }
 

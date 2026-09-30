@@ -18,14 +18,24 @@ public class GateMetrics {
 
     private final MeterRegistry registry;
     private final Timer latency;
+    private final Timer search;
     private final DistributionSummary top1;
     private final DistributionSummary margin;
 
     public GateMetrics(MeterRegistry registry) {
         this.registry = registry;
-        this.latency = Timer.builder("gate.decision").description("Gate decision latency").register(registry);
+        // publishPercentiles adds p50/p95 series computed in the service (over a sliding ~2 min window)
+        this.latency = Timer.builder("gate.decision").description("Gate decision latency")
+                .publishPercentiles(0.5, 0.95).register(registry);
+        this.search = Timer.builder("gate.gallery.search").description("Unwrap DEK, decrypt and score the gallery")
+                .publishPercentiles(0.5, 0.95).register(registry);
         this.top1 = DistributionSummary.builder("gate.match.top1.score").register(registry);
         this.margin = DistributionSummary.builder("gate.match.margin").register(registry);
+    }
+
+    /** Per-event cost of having no plaintext cache: DEK unwrap + DB read + decrypt + dot products. */
+    public void recordSearch(Duration elapsed) {
+        search.record(elapsed);
     }
 
     public void record(GateEvent event, Duration elapsed) {

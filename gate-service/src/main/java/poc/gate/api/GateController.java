@@ -13,11 +13,14 @@ import poc.gate.decision.Decision;
 import poc.gate.decision.ReasonCode;
 import poc.gate.events.GateDecisionService;
 import poc.gate.events.GateEvent;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** A gate camera posts one capture per passenger. Like a FastAPI router function with File/Form/Header params. */
 @RestController
 public class GateController {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record GateEventResponse(long eventId, String gateId, String flightId, Decision.Outcome decision,
                                     ReasonCode reason, String profileId, Double top1, Double top2) {
 

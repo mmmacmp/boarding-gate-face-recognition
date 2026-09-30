@@ -12,8 +12,6 @@ spring:
   jpa:
     open-in-view: false           # no lazy DB access from controllers: the DB work ends inside the service
     hibernate.ddl-auto: validate  # Flyway owns the schema; Hibernate only checks the entities match it
-  jackson:
-    property-naming-strategy: SNAKE_CASE   # JSON uses flight_id etc., like the Python services
   servlet.multipart:
     max-file-size: 5MB
     max-request-size: 6MB
@@ -57,9 +55,12 @@ gate:
     connect-timeout: 100ms
     read-timeout: 2s
   policy:
-    # ILLUSTRATIVE placeholders, not calibrated. Brackets keep "_" and "-" in map keys.
+    # ILLUSTRATIVE, not calibrated. Brackets keep "_" and "-" in map keys.
+    # R50: 0.44 = highest impostor top-1 seen (0.413) + 0.02 gap, from tools/score_analysis.py on a 49-identity,
+    # mostly synthetic gallery (docs/score-analysis.md). The placeholder 0.35 let 13 of 100 impostors through.
+    # SFace: OpenCV Zoo default, not analysed here.
     thresholds:
-      "[r50-buffalo_l]": 0.35
+      "[r50-buffalo_l]": 0.44
       "[sface-2021dec]": 0.363
     margin: 0.10
   kek:

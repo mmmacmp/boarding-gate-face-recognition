@@ -3,11 +3,14 @@ package poc.gate.gallery;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** Opt-in and opt-out. Withdrawal removes the passenger's matchable templates in the same transaction. */
 @Service
 public class ConsentService {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Withdrawal(String profileId, PassengerConsent.Status status, int removedEntries) {
     }
 

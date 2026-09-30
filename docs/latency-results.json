@@ -1,0 +1,104 @@
+{
+  "cuda": {
+    "n": 200,
+    "warmup": 20,
+    "hardware": {
+      "gpu": "NVIDIA GeForce RTX 4060, 8188 MiB, 591.86",
+      "cpu": "Intel(R) Core(TM) i5-14400F",
+      "os": "Windows-10-10.0.26300-SP0",
+      "python": "3.11.9"
+    },
+    "embed_http": {
+      "p50": 23.6,
+      "p95": 24.6
+    },
+    "detect": {
+      "p50": 12.1,
+      "p95": 12.7
+    },
+    "embed": {
+      "p50": 4.5,
+      "p95": 4.8
+    },
+    "gallery_size": 49,
+    "end_to_end": {
+      "p50": 50.9,
+      "p95": 55.7
+    },
+    "end_to_end_reasons": {
+      "IDP_REJECTED": 200
+    },
+    "gallery_search": {
+      "p50": 2.56,
+      "p95": 5.7
+    }
+  },
+  "cpu": {
+    "n": 200,
+    "warmup": 20,
+    "hardware": {
+      "gpu": "NVIDIA GeForce RTX 4060, 8188 MiB, 591.86",
+      "cpu": "Intel(R) Core(TM) i5-14400F",
+      "os": "Windows-10-10.0.26300-SP0",
+      "python": "3.11.9"
+    },
+    "embed_http": {
+      "p50": 363.3,
+      "p95": 457.9
+    },
+    "detect": {
+      "p50": 142.8,
+      "p95": 195.8
+    },
+    "embed": {
+      "p50": 207.0,
+      "p95": 292.6
+    },
+    "gallery_size": 49,
+    "end_to_end": {
+      "p50": 456.6,
+      "p95": 565.4
+    },
+    "end_to_end_reasons": {
+      "IDP_REJECTED": 200
+    },
+    "gallery_search": {
+      "p50": 26.74,
+      "p95": 45.61
+    }
+  },
+  "cpu4": {
+    "n": 200,
+    "warmup": 20,
+    "hardware": {
+      "gpu": "NVIDIA GeForce RTX 4060, 8188 MiB, 591.86",
+      "cpu": "Intel(R) Core(TM) i5-14400F",
+      "os": "Windows-10-10.0.26300-SP0",
+      "python": "3.11.9"
+    },
+    "embed_http": {
+      "p50": 158.4,
+      "p95": 173.9
+    },
+    "detect": {
+      "p50": 75.5,
+      "p95": 88.9
+    },
+    "embed": {
+      "p50": 74.8,
+      "p95": 82.3
+    },
+    "gallery_size": 49,
+    "end_to_end": {
+      "p50": 177.1,
+      "p95": 192.7
+    },
+    "end_to_end_reasons": {
+      "IDP_REJECTED": 200
+    },
+    "gallery_search": {
+      "p50": 2.16,
+      "p95": 2.56
+    }
+  }
+}

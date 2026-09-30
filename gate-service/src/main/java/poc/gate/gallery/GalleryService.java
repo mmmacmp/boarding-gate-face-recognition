@@ -13,11 +13,14 @@ import poc.gate.clients.IdentityClient;
 import poc.gate.clients.ModelClient;
 import poc.gate.crypto.TemplateCrypto;
 import poc.gate.decision.Candidate;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** Builds a flight's encrypted gallery and searches it. */
 @Service
 public class GalleryService {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record BuildResult(String flightId, Flight.Status status, int enrolled, int notConsented, int rejected,
                               int alreadyBoarded) {
     }

@@ -10,14 +10,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import poc.gate.gallery.ConsentService;
 import poc.gate.gallery.PassengerConsent;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** A passenger opts in or out of biometric boarding. Withdrawal applies from the very next gate event. */
 @RestController
 public class ConsentController {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ConsentRequest(String profileId) {
     }
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ConsentResponse(String profileId, PassengerConsent.Status status) {
     }
 

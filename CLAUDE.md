@@ -94,7 +94,7 @@ gate-service ──Actuator──▶ /actuator/health, /actuator/prometheus, /ac
 - Gallery rebuild must preserve boarded state: it replaces only `ACTIVE` rows and never re-enrols a passenger who is already `BOARDED` on that flight.
 
 **Default config (placeholders; calibrate and document)**
-- Thresholds: R50 cosine `T=0.35` (placeholder); SFace `T=0.363` (OpenCV Zoo default); margin `Δ=0.10` (placeholder).
+- Thresholds: R50 cosine `T=0.44` (set 30 Sep 2026 from `tools/score_analysis.py`: highest impostor top-1 0.413 + 0.02 on a 49-identity, mostly synthetic gallery; still illustrative; the original placeholder 0.35 let 13/100 impostors through); SFace `T=0.363` (OpenCV Zoo default, not analysed); margin `Δ=0.10` (placeholder).
 - `mock-idp` timeouts: connect 100 ms, read 300 ms.
 - `model-service` read timeout: 800 ms on GPU, 1500 ms on CPU.
 - Breaker: sliding window 10, minimum 5 calls, 50% failure rate, slow-call threshold 300 ms, 10 s open, 2 half-open calls.

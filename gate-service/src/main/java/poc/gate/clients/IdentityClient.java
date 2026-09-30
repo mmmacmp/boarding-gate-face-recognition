@@ -7,14 +7,18 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import poc.gate.config.GateProperties;
 import poc.gate.decision.ReasonCode;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** Calls mock-idp, the MOCK stand-in for an external identity provider. The real interface is not publicly known. */
 @Component
 public class IdentityClient {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record VerifyRequest(String profileId, String flightId) {
     }
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record VerifyResponse(String profileId, String flightId, String result) {
     }
 

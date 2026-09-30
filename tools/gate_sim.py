@@ -5,9 +5,10 @@
   python tools/gate_sim.py --profile STRANGER --probe 1   # synthetic identity that is never enrolled
   python tools/gate_sim.py --image path/to/capture.jpg    # any consenting person's photo
   python tools/gate_sim.py --profile P001 --probe 1 --key same-key   # repeat an Idempotency-Key
+  python tools/gate_sim.py --scenario demo              # the scripted demo (resets the DB first)
 
 EXIF is stripped before sending. A non-200 answer is shown as MANUAL: the gate's own default when the service fails.
-(Scripted demo scenarios come in Step 5.)
+The scripted demo lives in demo_scenario.py.
 """
 import argparse
 import time
@@ -47,8 +48,14 @@ def main():
     ap.add_argument("--image", type=Path, help="send this image instead of a volunteer probe")
     ap.add_argument("--key", help="Idempotency-Key (default: a new UUID per capture)")
     ap.add_argument("--data", type=Path, default=ROOT / "data")
+    ap.add_argument("--scenario", choices=["demo"], help="run a scripted scenario instead of single captures")
+    ap.add_argument("--mocks", default="http://localhost:8002")
     args = ap.parse_args()
 
+    if args.scenario == "demo":
+        from demo_scenario import run_demo
+        run_demo(args.gate_service, args.mocks, args.data)
+        return
     if args.image:
         captures = [args.image]
     elif args.profile:

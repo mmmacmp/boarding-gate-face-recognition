@@ -13,15 +13,19 @@ import poc.gate.gallery.FlightRepository;
 import poc.gate.gallery.GalleryEntry;
 import poc.gate.gallery.GalleryEntryRepository;
 import poc.gate.gallery.GalleryService;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** Flight operations for the gate agent: build the gallery before boarding, and inspect the flight. */
 @RestController
 public class FlightController {
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record FlightView(String flightId, Flight.Status status, Instant departureTime, String modelId,
                              long activeEntries, long boardedEntries) {
     }
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record BuildFailed(String flightId, String status, String reason) {
     }
 
