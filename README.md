@@ -1,5 +1,14 @@
 # Consent-first flight-gallery boarding gate (personal project)
 
+DEMO_VIDEO_URL
+
+*Demo, 1 min 44 s, no sound. The X-ray console boards flight DEMO01: synthetic passengers board, while a poor
+capture, a stranger, two faces and a tiny face all go to a person instead of guessing. Then the author, on a live
+webcam, is first `AMBIGUOUS` against a look-alike profile, boards once the look-alike's consent is withdrawn, and the
+flight is closed and crypto-shredded. The video shows the author's own face (published by choice) and synthetic faces
+from DigiFace-1M, Microsoft, research licence (R-UDA v1.0, non-commercial); those images stay under the R-UDA terms
+(§12).*
+
 > **A 2-day personal prototype. Not production-ready.** Not affiliated with any airline or government agency: every
 > external system here (identity provider, departure control) is a mock with a hypothetical API. Thresholds are
 > illustrative. No accuracy claims.
@@ -9,7 +18,7 @@
 *The presenter-driven X-ray console (`gate-console/`, demo mode only) right after a BOARD: the passenger's tile has moved
 to "Boarded" because the database says so, the comparison card shows score and margin against T and Δ, and the
 waterfall splits the decision into embed, decrypt + search, identity check and DB write. **All face images are blurred
-in this README copy**; the live demo shows them (volunteer with consent; synthetic faces from DigiFace-1M, research
+in this still**; the video above shows them (the author as the volunteer; synthetic faces from DigiFace-1M, research
 licence).*
 
 ## 1. What this is
@@ -81,6 +90,24 @@ sequenceDiagram
 
 Details, sequence and contracts: [`docs/architecture.md`](docs/architecture.md). Decisions: [`docs/decisions/`](docs/decisions/).
 
+### Design sketches
+
+Hand-drawn system design (source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw); open it at
+excalidraw.com). The red box is the airline's boundary; everything outside it is an external system.
+
+**Preparation, before boarding.** (1) gate-service asks `dcs-stub` for the flight manifest. (2) It asks `mock-idp` for
+reference images, only for passengers with active consent. (3) model-service detects and embeds each face. (4) The
+embeddings are encrypted with the flight's DEK and stored as that flight's gallery in PostgreSQL.
+
+![Preparation stage: gate-service fetches the manifest from mock-dcs and consented reference images from the mock identity provider, has model-service embed them, and stores an encrypted flight gallery in PostgreSQL](docs/img/design-preparation.png)
+
+**At the gate.** The gate sends image + flight id + Idempotency-Key. model-service returns the face count and one
+embedding; it never sees an identity. gate-service searches only the eligible gallery (active, consented, not yet
+boarded), asks `mock-idp` to confirm the selected profile, marks the passenger boarded at most once, and returns
+`BOARD` or `MANUAL` + reason to the gate.
+
+![At the gate: the boarding gate sends image, flight id and Idempotency-Key to gate-service, which gets an embedding from model-service, searches the eligible gallery in PostgreSQL, confirms the selected profile with the mock identity provider and returns BOARD or MANUAL with a reason](docs/img/design-gate.png)
+
 ## 4. Gate decision policy
 
 1. Idempotency-Key seen before → the stored decision. 2. Flight not `BOARDING` → `GALLERY_UNAVAILABLE`.
@@ -113,6 +140,12 @@ calibrated at a target FPIR on operational data.
 - **Honest limits:** decrypted templates sit in JVM memory while an event is processed; the KEK is in a file, not an
   HSM; an airline-held key is **not** the EDPB "passenger-held key" scenario; walk-through cameras still *detect*
   people who have not consented (the POC minimises what happens next, it cannot prevent the capture).
+
+![Envelope encryption and crypto-shredding: the KEK unwraps the flight DEK, which decrypts the encrypted embeddings; after departure the wrapped DEK becomes NULL and the embeddings are deleted](docs/img/design-crypto-shred.png)
+
+*Left: during matching, the KEK unwraps the flight's DEK, which decrypts the embeddings in memory. Right: after
+departure the wrapped DEK is removed and the gallery rows are deleted, so any leftover copy of the ciphertext can no
+longer be decrypted.*
 
 ## 6. Resilience and fallback
 
@@ -264,7 +297,8 @@ recording notes: [`docs/demo-script.md`](docs/demo-script.md).
   the credit and bind recipients to the R-UDA terms. Citation: G. Bae, M. de La Gorce, T. Baltrušaitis, C. Hewitt,
   D. Chen, J. Valentin, R. Cipolla, J. Shen, "DigiFace-1M: 1 Million Digital Face Images for Face Recognition",
   WACV 2023.
-- **Volunteer photos:** one consenting volunteer (the author), local only, never committed. Screenshots of the X-ray
+- **Volunteer photos:** one consenting volunteer (the author), local only, never committed. The demo video at the top
+  shows the author's own face by the author's choice; it is hosted as a GitHub attachment, not committed. Screenshots of the X-ray
   view (they show faces) stay in the gitignored `docs/img/xray/`; the README image has every face blurred.
 
 ## 13. Production gaps

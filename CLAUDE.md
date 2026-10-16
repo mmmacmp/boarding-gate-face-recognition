@@ -140,7 +140,7 @@ spikes/ (only if the Day-1 checkpoint triggers)
   - once: `python tools/make_demo_assets.py` (S01-S03 + no-face / two-faces / tiny-face probes in gitignored `data/demo/`, verified with the model-service)
   - mocks with `$env:DEMO_XRAY="true"` (reference thumbnails); gate-service with `$env:SPRING_PROFILES_ACTIVE="demo"` (`application-demo.yml`: X-ray on, demo-only breaker window 2, 3 s purge grace)
   - `python tools/demo_scenario.py --reset-demo-flight` (DEMO01 only, ~10 s; the console's Reset button); rehearsal: `docs/demo-rehearsal.md`
-  - X-ray screenshots show faces: keep them in gitignored `docs/img/xray/`; never commit media with the volunteer's face
+  - X-ray screenshots show faces: keep them in gitignored `docs/img/xray/`; never commit media with the volunteer's face. Exception (author's choice, 16 Oct 2026): the demo video with the author's own face is hosted as a GitHub attachment and embedded in the README, never committed
 
 ## Definition of done
 - Every row of the failure-mode table is green in tests.
