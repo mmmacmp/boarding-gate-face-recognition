@@ -13,6 +13,8 @@ from DigiFace-1M, Microsoft, research licence (R-UDA v1.0, non-commercial); thos
 > external system here (identity provider, departure control) is a mock with a hypothetical API. Thresholds are
 > illustrative. No accuracy claims.
 
+**Run it yourself:** setup, services and demos in [§10 Running it](#10-running-it).
+
 ![X-ray demo console at 1920×1080: P001 has just boarded and moved to "Boarded"; all face images are blurred for this README](docs/img/console-xray-public.png)
 
 *The presenter-driven X-ray console (`gate-console/`, demo mode only) right after a BOARD: the passenger's tile has moved
@@ -221,45 +223,128 @@ intra-op threads at 4 by building the sessions directly, because InsightFace `ge
 
 ## 10. Running it
 
-Prerequisites: Windows, Python 3.11, Docker Desktop, a JDK (built with JDK 25, targets Java 21), optional NVIDIA GPU.
-Maven is used through the wrapper (`mvnw.cmd`, from start.spring.io).
+Everything runs locally: PostgreSQL in Docker, the three services natively. Commands are **Windows PowerShell**, run
+from the repository root unless a line starts with `cd`; on Linux/macOS use `.venv/bin/python`, `./mvnw` and
+`export NAME=value` instead (GPU mode is only tested on Windows).
+
+### 10.1 Prerequisites
+
+| Tool | Version | Used for |
+|---|---|---|
+| Git | any | cloning |
+| Python | **3.11** | model-service, mocks, tools |
+| Docker Desktop | running | PostgreSQL 17 on `localhost:5433` |
+| JDK | 21 or newer (built with 25) | gate-service (Maven comes with the wrapper); `keytool` |
+| Node.js | 22 LTS or newer | the demo console only |
+| NVIDIA GPU | optional | `DEVICE=cuda`; everything also runs on CPU |
+
+Ports used: 5433 (Postgres), 8001 (model-service), 8002 (mocks), 8081 (gate-service), 5173 (console).
+
+### 10.2 One-time setup
 
 ```powershell
+git clone https://github.com/mmmacmp/boarding-gate-face-recognition.git
+cd boarding-gate-face-recognition
+
+# Python environment
 py -3.11 -m venv .venv
 .\.venv\Scripts\pip install -r model-service/requirements.txt -r mocks/requirements.txt -r tools/requirements.txt
 .\.venv\Scripts\pip uninstall -y onnxruntime onnxruntime-gpu
-.\.venv\Scripts\pip install "onnxruntime-gpu[cuda,cudnn]==1.30.0"      # CUDA 12 driver: ==1.26.0; CPU only: onnxruntime
+.\.venv\Scripts\pip install "onnxruntime-gpu[cuda,cudnn]==1.30.0"   # CUDA 13 driver; CUDA 12: ==1.26.0
+# no NVIDIA GPU instead:  .\.venv\Scripts\pip install onnxruntime==1.30.0   (and use DEVICE=cpu below)
+
+# Face models (InsightFace buffalo_l: non-commercial research only; YuNet + SFace: MIT / Apache-2.0)
 cd model-service; ..\.venv\Scripts\python download_models.py; cd ..
-.\.venv\Scripts\python tools\fetch_digiface_subset.py                     # synthetic passengers (local only)
-keytool -genseckey -alias kek -keyalg AES -keysize 256 -storetype PKCS12 -keystore data\kek.p12 -storepass <pw>
-Set-Content data\local-secrets.properties "gate.kek.password=<pw>"         # gitignored
-docker compose -f ops/docker-compose.yml up -d --wait db                   # Postgres on localhost:5433
-cd model-service; $env:DEVICE="cuda"; ..\.venv\Scripts\python -m uvicorn app.main:app --port 8001   # or DEVICE=cpu, MODEL=sface
-cd mocks; ..\.venv\Scripts\python -m uvicorn main:app --port 8002
-cd gate-service; $env:GATE_RETENTION_GRACE="10s"; $env:GATE_RETENTION_PURGE_INTERVAL="5s"; .\mvnw.cmd spring-boot:run   # :8081
-.\.venv\Scripts\python tools\gate_sim.py --scenario demo                  # resets the DB, seeds, runs the demo
-cd gate-console; npm install; npm run dev                                  # demo console on http://localhost:5173
+
+# Synthetic passengers: a 50-identity DigiFace-1M subset via HTTP range requests (research licence, stays local)
+.\.venv\Scripts\python tools\fetch_digiface_subset.py
+
+# Key-encryption key in a local keystore (stand-in for a KMS/HSM); choose your own password
+New-Item -ItemType Directory -Force data | Out-Null
+keytool -genseckey -alias kek -keyalg AES -keysize 256 -storetype PKCS12 -keystore data\kek.p12 -storepass <password>
+Set-Content -Encoding ascii data\local-secrets.properties "gate.kek.password=<password>"
+
+# Demo console (optional)
+cd gate-console; npm install; cd ..
 ```
 
-**Demo console** (`gate-console/`, React 19 + Vite 8, plain CSS): the gate panel sends demo captures (volunteer
-day/night photos, a simulated look-alike on POC002, a synthetic stranger, the next synthetic passenger) or a webcam
-capture, and shows a signage-style decision banner with the reason in plain English plus score bars against T and Δ.
-The operations panel shows gallery counts, the manual-fallback rate over the last 20 events, both breakers with a
-3-minute state timeline, the per-stage latency of the last decision, fault buttons (slow / down identity provider,
-model down), consent withdrawal, a "reset demo" button (the same reset as the demo script) and recent events. The
-Vite dev server proxies every call, so the services need no CORS. Identity is shown only for `BOARD`.
+Everything in `data/` is gitignored: keys, synthetic faces and your photos never leave your machine.
 
-**Presenter demo (X-ray view, flight DEMO01).** A 5-passenger demo flight (P001, the simulated look-alike P001-TWIN,
-and synthetic S01–S03) with a 15-probe script that covers every decision path: poor capture, look-alike, consent
-withdrawal, clean BOARD, boarded-not-searched, idempotent replay, stranger, no face, two faces, face too small,
-identity provider INVALID / slow, breaker OPEN and recovery, face service down, and depart + crypto-shred. Nothing
-runs until the presenter clicks; every probe shows expected vs actual. POC001 (49 passengers) is unchanged for the
-benchmark and the score analysis. Demo mode is off by default and needs two switches:
+### 10.3 Add yourself as the volunteer
+
+The scripted demo and the X-ray console need one real, consenting person as passenger `P001`. Use yourself (or
+someone who has agreed); never web or celebrity images. Without `P001`, flight POC001 is seeded with synthetic
+passengers only and you can still run single captures (§10.5 B).
+
+```
+data/volunteers/P001/reference.jpg    # enrolment photo (what mock-idp serves): frontal, face at least ~150 px wide
+data/volunteers/P001/probe.jpg        # gate capture 1: easy (daylight, frontal)
+data/volunteers/P001/probe_02.jpg     # gate capture 2: hard (night, low angle); add probe_03.* ... as needed
+```
+
+`.jpg`, `.jpeg` and `.png` all work; EXIF is stripped before any image leaves the tools. One face per photo.
+
+### 10.4 Start the services
+
+Four terminals, each started from the repository root:
 
 ```powershell
-.\.venv\Scripts\python tools\make_demo_assets.py                              # once: S01-S03 + special probes in data/demo/
-$env:DEMO_XRAY="true"; cd mocks; ..\.venv\Scripts\python -m uvicorn main:app --port 8002          # thumbnails
-$env:SPRING_PROFILES_ACTIVE="demo"; cd gate-service; .\mvnw.cmd spring-boot:run                  # application-demo.yml
+# 1. PostgreSQL (also creates the gate_test database for integration tests)
+docker compose -f ops/docker-compose.yml up -d --wait db
+
+# 2. model-service on :8001 (DEVICE=cpu without a GPU; MODEL=sface for the license-clean models)
+cd model-service; $env:DEVICE="cuda"; ..\.venv\Scripts\python -m uvicorn app.main:app --port 8001
+
+# 3. mocks (mock-idp + dcs-stub) on :8002
+cd mocks; ..\.venv\Scripts\python -m uvicorn main:app --port 8002
+
+# 4. gate-service on :8081 (the two retention settings make the depart + crypto-shred step quick to watch)
+cd gate-service; $env:GATE_RETENTION_GRACE="10s"; $env:GATE_RETENTION_PURGE_INTERVAL="5s"; .\mvnw.cmd spring-boot:run
+```
+
+Check: `curl http://localhost:8081/actuator/health` reports `"status":"UP"`.
+
+### 10.5 Try it
+
+**A. Scripted demo in the terminal** (needs `P001`, about 40 s): resets the database, seeds the flights, then shows
+matching against only the flight's consented gallery, boarded passengers leaving it, a stranger, consent withdrawal at
+query time, a slow identity provider opening the circuit breaker, a simulated look-alike going to `AMBIGUOUS`, and
+crypto-shredding after departure.
+
+```powershell
+.\.venv\Scripts\python tools\gate_sim.py --scenario demo
+```
+
+**B. Single captures:**
+
+```powershell
+.\.venv\Scripts\python tools\seed.py                                   # flights POC001 + POC002 (needs services up)
+.\.venv\Scripts\python tools\gate_sim.py --profile S001 --probe 1      # a synthetic passenger -> BOARD
+.\.venv\Scripts\python tools\gate_sim.py --profile STRANGER --probe 1  # never enrolled -> NO_MATCH, manual
+.\.venv\Scripts\python tools\gate_sim.py --profile P001                # your own probes
+```
+
+**C. Demo console** (`gate-console/`, React 19 + Vite 8, plain CSS): `cd gate-console; npm run dev`, then open
+http://localhost:5173. The gate panel sends demo captures (volunteer day/night photos, a simulated look-alike on
+POC002, a synthetic stranger, the next synthetic passenger) or a webcam capture, and shows a signage-style decision
+banner with the reason in plain English plus score bars against T and Δ. The operations panel shows gallery counts,
+the manual-fallback rate over the last 20 events, both breakers with a 3-minute state timeline, the per-stage latency
+of the last decision, fault buttons (slow / down identity provider, model down), consent withdrawal, a "reset demo"
+button and recent events. The Vite dev server proxies every call, so the services need no CORS. Identity is shown
+only for `BOARD`.
+
+**D. Presenter demo (X-ray view, flight DEMO01; the video at the top).** A 5-passenger demo flight (P001, the simulated
+look-alike P001-TWIN, and synthetic S01–S03) with a 15-probe script that covers every decision path: poor capture,
+look-alike, consent withdrawal, clean BOARD, boarded-not-searched, idempotent replay, stranger, no face, two faces,
+face too small, identity provider INVALID / slow, breaker OPEN and recovery, face service down, and depart +
+crypto-shred. Nothing runs until the presenter clicks; every probe shows expected vs actual. POC001 (49 passengers) is
+unchanged for the benchmark and the score analysis. Demo mode is off by default; restart mocks and gate-service with
+the two switches below:
+
+```powershell
+.\.venv\Scripts\python tools\make_demo_assets.py      # once, with model-service running: S01-S03 + special probes in data/demo/
+$env:DEMO_XRAY="true"; cd mocks; ..\.venv\Scripts\python -m uvicorn main:app --port 8002          # terminal 3: thumbnails
+$env:SPRING_PROFILES_ACTIVE="demo"; cd gate-service; .\mvnw.cmd spring-boot:run                  # terminal 4: application-demo.yml
 .\.venv\Scripts\python tools\demo_scenario.py --reset                         # full reset incl. DEMO01 (~20 s)
 cd gate-console; npm run dev                                                   # http://localhost:5173, "Reset demo" ~10 s
 ```
@@ -268,8 +353,32 @@ The demo profile uses a **demo-only** identity breaker (window 2, minimum 2 call
 the console) and a 3 s purge grace; the tested defaults are unchanged. Rehearsal checklist:
 [`docs/demo-rehearsal.md`](docs/demo-rehearsal.md).
 
-Volunteer photos go in `data/volunteers/<id>/` (layout in `data/README-consent.md`, gitignored). The demo script and
-recording notes: [`docs/demo-script.md`](docs/demo-script.md).
+**Reset.** Rebuilding a gallery deliberately keeps boarded state, so to start over, empty the tables:
+
+```powershell
+docker compose -f ops/docker-compose.yml exec -T db psql -U poc -d gate -c "TRUNCATE flight, passenger_consent, gallery_entry, gate_event, outbox, audit_log"
+```
+
+### 10.6 Tests
+
+```powershell
+cd gate-service; .\mvnw.cmd test        # unit tests, no database
+cd gate-service; .\mvnw.cmd verify      # + integration tests against the compose database; JaCoCo in target/site/jacoco
+cd model-service; ..\.venv\Scripts\python -m pytest
+cd mocks; ..\.venv\Scripts\python -m pytest
+```
+
+### 10.7 Troubleshooting
+
+- **`DEVICE=cuda` fails to start:** the ONNX Runtime build must match the driver's CUDA major version (1.30.0 for
+  CUDA 13, 1.26.0 for CUDA 12). `DEVICE=cpu` always works; latency is in §8.
+- **Port already in use:** Postgres is mapped to 5433 so it does not clash with a local PostgreSQL on 5432; the
+  gate-service uses 8081 because 8080 is often taken. Service URLs live in
+  `gate-service/src/main/resources/application.yml`.
+- **Every decision is `MANUAL` with `GALLERY_UNAVAILABLE`:** the flight is not seeded or not `BOARDING`; run `seed.py`
+  (or the scripted demo, which seeds).
+- **gate-service fails at startup on the keystore:** `data/kek.p12` or the password in
+  `data/local-secrets.properties` is missing; the `GATE_KEK_PASSWORD` environment variable also works.
 
 ## 11. Tests and coverage
 
