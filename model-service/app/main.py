@@ -47,7 +47,7 @@ def create_app(settings: Settings, backend=None) -> FastAPI:
         yield  # Startup ends here; FastAPI serves requests until shutdown resumes this context.
 
     app = FastAPI(title="poc model-service", lifespan=lifespan,
-                  description="Stateless face embedding service for an interview POC. Not production-ready.")
+                  description="Stateless face embedding service for a personal prototype. Not production-ready.")
     Instrumentator().instrument(app).expose(app)  # GET /metrics (request counts and latency)
 
     def analyse(img: np.ndarray) -> EmbedResponse:

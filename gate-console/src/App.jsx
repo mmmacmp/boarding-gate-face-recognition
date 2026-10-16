@@ -246,7 +246,7 @@ export default function App() {
       <footer className="footer">
         <span>Prototype by Mahmoud · 2026</span>
         <span>Synthetic faces: DigiFace-1M, Microsoft, research licence (R-UDA v1.0, non-commercial)</span>
-        <span>Interview POC · not production-ready · all external systems are mocks</span>
+        <span>Personal prototype · not production-ready · all external systems are mocks</span>
       </footer>
     </div>
   )

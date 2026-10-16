@@ -260,7 +260,7 @@ python .\peakmem.py python s06_pad.py
 # Manual spoof check: show t1.jpg full-screen on a phone, photograph it with a webcam or phone, save as spoof.jpg, then:
 python s06_pad.py spoof.jpg
 ```
-**Measure:** p50/p95 and `is_real` for both images. **Pass:** `t1.jpg` gives `True`. Record whatever `spoof.jpg` gives; a `True` there is a *finding* for the interview (a PAD limitation), not a setup failure.
+**Measure:** p50/p95 and `is_real` for both images. **Pass:** `t1.jpg` gives `True`. Record whatever `spoof.jpg` gives; a `True` there is a *finding* to report (a PAD limitation), not a setup failure.
 
 ## Step 7: Multi-face tracking, ByteTrack (roboflow/trackers, Apache-2.0)
 `s07_tracking.py`

@@ -1,6 +1,6 @@
 # Architecture
 
-Interview POC, not production-ready. External systems are mocks with hypothetical APIs.
+Personal prototype, not production-ready. External systems are mocks with hypothetical APIs.
 
 ## Components
 

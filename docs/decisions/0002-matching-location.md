@@ -10,4 +10,4 @@
   airline business logic, independent of where the matcher runs. The matcher sits behind an interface.
 - Consequences: templates exist on the airline side (encrypted at rest, plaintext per event in memory); an
   identity-provider outage becomes a manual-boarding decision; this is **not** an EDPB passenger-held-key design.
-- Open question for the hiring manager: where does matching run today, and does the gate get a decision or scores?
+- Open question for a real deployment: where does matching run today, and does the gate get a decision or scores?

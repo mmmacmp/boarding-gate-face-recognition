@@ -1,6 +1,6 @@
-# Consent-first flight-gallery boarding gate (interview POC)
+# Consent-first flight-gallery boarding gate (personal project)
 
-> **A 2-day interview POC. Not production-ready.** Not affiliated with any airline or government agency: every
+> **A 2-day personal prototype. Not production-ready.** Not affiliated with any airline or government agency: every
 > external system here (identity provider, departure control) is a mock with a hypothetical API. Thresholds are
 > illustrative. No accuracy claims.
 

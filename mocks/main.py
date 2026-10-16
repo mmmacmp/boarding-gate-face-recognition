@@ -8,7 +8,7 @@ import dcs_stub
 import mock_idp
 
 app = FastAPI(title="poc mocks: mock-idp + dcs-stub",
-              description="Hypothetical mock APIs for an interview POC. Not real integrations.")
+              description="Hypothetical mock APIs for a personal prototype. Not real integrations.")
 app.include_router(mock_idp.router)
 app.include_router(mock_idp.admin)
 app.include_router(mock_idp.demo)

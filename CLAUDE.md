@@ -1,10 +1,10 @@
 # CLAUDE.md: Boarding-Gate Face Recognition POC (draft, 30 Sep 2026)
 
-This is a two-day **interview POC** for the Emirates "IT Group Security – Facial Recognition – Senior Software Engineer" role. It is used in a conversation with the hiring manager, not a live demo.
+This is a two-day **personal prototype**: a boarding-gate face-recognition system built to explore the engineering around a matcher (gallery scoping, consent, fail-safe fallback, retention). It is presented with a recording, not a live demo. It is not affiliated with any airline or government agency.
 
 The POC is a **consent-first flight-gallery boarding gate**:
 - The airline gate service matches a passenger 1:N against **only that flight's consented, enrolled gallery**.
-- Identity is anchored in a **mock external government identity service** (`mock-idp`, standing in for GDRFA).
+- Identity is anchored in a **mock external government identity service** (`mock-idp`).
 - A passenger is removed from the gallery once boarded.
 - The passenger is sent to **manual check** when the top two scores are too close.
 - On **any failure** (including `mock-idp` being slow or down) the gate falls back to **manual boarding**.
@@ -29,7 +29,7 @@ Do **not** edit anything in `docs/research/` except to add `smoke-test-results.m
 - **model-service:** Python 3.11, FastAPI, `insightface==2.0` (SCRFD-10G + ArcFace R50 `buffalo_l`), `opencv-python==5.0.0.93` (YuNet + SFace license-clean mode), pytest.
   - GPU: `onnxruntime-gpu[cuda,cudnn]==1.30.0` needs **CUDA 13**; use `==1.26.0` for CUDA 12. Call `onnxruntime.preload_dlls()` before creating sessions.
   - `DEVICE=cuda|cpu` and `MODEL=r50|sface` switches.
-- **mocks:** Python FastAPI app with two routers: `mock_idp` (GDRFA stand-in: reference images, 1:1 `/v1/verify`, `/admin/faults` for latency, error rate and down) and `dcs_stub` (manifest, boarding-event sink).
+- **mocks:** Python FastAPI app with two routers: `mock_idp` (identity-authority stand-in: reference images, 1:1 `/v1/verify`, `/admin/faults` for latency, error rate and down) and `dcs_stub` (manifest, boarding-event sink).
 - **PostgreSQL** in Docker (`postgres:17` or `pgvector/pgvector:pg17`). Run the model-service **natively** on Windows for GPU access.
 - **gate-console** (should): React + Vite; polls the gate-service.
 - **Day-1 checkpoint (17:30):** if the `DecisionPolicy` and `TemplateCrypto` tests are not green **and** one end-to-end BOARD does not work through `tools/gate_sim.py`:
@@ -41,7 +41,7 @@ Do **not** edit anything in `docs/research/` except to add `smoke-test-results.m
 - **Honesty.**
   - The README must contain "Not production-ready", a **Production gaps** section, illustrative-threshold caveats, and a GPU vs CPU latency table with hardware details.
   - No accuracy claims.
-- **No impersonation.** No Emirates or GDRFA names, logos or branding in code, UI or API paths. Use `poc`, `mock-idp`, `dcs-stub`, and flight numbers like `POC001`.
+- **No impersonation.** No real airline or government-agency names, logos or branding in code, UI or API paths. Use `poc`, `mock-idp`, `dcs-stub`, and flight numbers like `POC001`.
 - **Biometric data.**
   - Only photos of **consenting volunteers** go in `data/` (gitignored).
   - No web or celebrity images. Never commit photos, embeddings or keys.
@@ -65,7 +65,7 @@ Do **not** edit anything in `docs/research/` except to add `smoke-test-results.m
 ```
 gate-sim / webcam ──POST /v1/gates/{gateId}/events (image, flightId, Idempotency-Key)──▶ gate-service (Spring Boot)
 gate-service ──RestClient + timeout + @CircuitBreaker──▶ model-service /v1/embed      (stateless, never sees identities)
-gate-service ──RestClient 300 ms + @CircuitBreaker───▶ mock-idp /v1/verify           ("GDRFA" stand-in, fault injection)
+gate-service ──RestClient 300 ms + @CircuitBreaker───▶ mock-idp /v1/verify           (identity-authority stand-in, fault injection)
 gate-service ──JPA/Flyway──▶ PostgreSQL: flight, passenger_consent, gallery_entry(ciphertext, iv, model_id), gate_event, outbox
 gate-service ──(should) outbox poller──▶ dcs-stub /v1/boarding-events
 gate-service ──Actuator──▶ /actuator/health, /actuator/prometheus, /actuator/circuitbreakers
@@ -151,5 +151,5 @@ spikes/ (only if the Day-1 checkpoint triggers)
 
 ## How to work with the user
 - Small, reviewable steps. After each block, summarise what changed and which Spring or Java concepts appeared, so the user can learn them.
-- When a design choice touches an unknown Emirates internal, do not assume it: say "not publicly known" and add it to the hiring-manager questions (plan §4.9).
+- When a design choice touches an unknown airline internal, do not assume it: say "not publicly known" and add it to the open questions (plan §4.9).
 - Use the Phase 3 building blocks, and prefer them over new dependencies. Ask before adding any new library.

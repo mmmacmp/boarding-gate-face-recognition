@@ -139,12 +139,12 @@ building_blocks:
 language_options:
   - option: all Python
     pros: Every model block pip-installs and was run end to end (InsightFace 2.0, UniFace, OpenCV 5, FAISS, trackers, FastAPI + pybreaker + Prometheus). Fastest to build in 2 days and matches the user's daily stack. GPU is straightforward via onnxruntime-gpu.
-    cons: Weak signal for the JD's Java/Spring/Hibernate emphasis. Async circuit breaking is weak (pybreaker needs Tornado). No standard outbox or idempotency library. onnxruntime-gpu 1.30 wheels need CUDA 13 (1.26 for CUDA 12).
+    cons: Does not exercise the Java/Spring/Hibernate target stack. Async circuit breaking is weak (pybreaker needs Tornado). No standard outbox or idempotency library. onnxruntime-gpu 1.30 wheels need CUDA 13 (1.26 for CUDA 12).
   - option: Java + Python
-    pros: Spring Boot 4.1.1 gate service with Resilience4j, Actuator/Micrometer, OTel starter and Spring Modulith outbox (validated) directly mirrors the JD, while the ML stays in Python where models and GPU support are mature. The same split exists in open source (CompreFace). Gives a clear diagram and failure-injection demo.
+    pros: Spring Boot 4.1.1 gate service with Resilience4j, Actuator/Micrometer, OTel starter and Spring Modulith outbox (validated) directly mirrors the target enterprise stack, while the ML stays in Python where models and GPU support are mature. The same split exists in open source (CompreFace). Gives a clear diagram and failure-injection demo.
     cons: Two services, a REST/gRPC contract and two builds within 2 days. The extra network hop needs timeouts and must be explained. CompreFace itself is stale, so it is a pattern only, not reusable code.
   - option: all Java
-    pros: Strongest literal JD fit. ONNX Runtime Java 1.30.0 (CPU and GPU artifacts on Maven) runs the same ONNX models (SFace 14.7 ms, R50 146 ms CPU measured). OpenCV Java has native YuNet/SFace. Single JVM to operate.
+    pros: Strongest literal fit with the Java target stack. ONNX Runtime Java 1.30.0 (CPU and GPU artifacts on Maven) runs the same ONNX models (SFace 14.7 ms, R50 146 ms CPU measured). OpenCV Java has native YuNet/SFace. Single JVM to operate.
     cons: SCRFD decoding, face alignment, ByteTrack and PAD cropping must be hand-ported. Prebuilt OpenCV Java lags (openpnp 4.9.0 Dec 2023; JavaCV 4.14.0). The CUDA version of onnxruntime_gpu for Java is undocumented. Highest risk of not finishing, and time goes to ML plumbing rather than system design.
 rejected:
   - repo: https://github.com/mikel-brostrom/boxmot

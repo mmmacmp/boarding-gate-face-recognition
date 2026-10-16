@@ -13,7 +13,7 @@
 	<artifactId>gate-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>gate-service</name>
-	<description>Boarding-gate decision service for an interview POC. Not production-ready.</description>
+	<description>Boarding-gate decision service for a personal prototype. Not production-ready.</description>
 
 	<properties>
 		<!-- Built with JDK 25, targets Java 21 (the parent turns this into javac release 21). -->

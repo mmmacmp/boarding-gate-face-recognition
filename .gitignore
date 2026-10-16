@@ -39,3 +39,8 @@ model-service/models/
 
 # X-ray demo screenshots show real (volunteer) and synthetic faces: local only
 docs/img/xray/
+
+# Local presentation material (video may show the volunteer's face): never publish
+*.mp4
+*.pptx
+*.excalidraw

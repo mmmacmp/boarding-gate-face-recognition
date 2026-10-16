@@ -1,6 +1,6 @@
 # Consent-first flight-gallery boarding gate: one-page summary
 
-*Two-day interview POC · **not production-ready** · all external systems are mocks · thresholds are illustrative, no
+*Two-day personal prototype · **not production-ready** · all external systems are mocks · thresholds are illustrative, no
 accuracy claims.*
 
 **Problem.** At an airport boarding gate, face recognition only works if the airline side gets the plumbing right:

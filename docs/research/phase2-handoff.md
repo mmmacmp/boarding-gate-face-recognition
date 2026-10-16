@@ -46,7 +46,7 @@ shortlisted_approaches:
     paper_title: "IDFace: Face Template Protection for Efficient and Secure Identification" (Kim et al., ICCV 2025) plus EDPB Opinion 11/2024 and CBP TVS purge rules; cancelable benchmark (Otroshi Shahreza et al., 2026)
     paper_url: https://openaccess.thecvf.com/content/ICCV2025/html/Kim_IDFace_Face_Template_Protection_for_Efficient_and_Secure_Identification_ICCV_2025_paper.html
     year: 2025
-    why_shortlisted: Fits an IT Group Security role and an airline integrating with an external identity provider (GDRFA). HE search of 1M templates took 126 ms, and template inversion (AAAI 2026) shows embeddings are sensitive. The EDPB and CBP give concrete design constraints.
+    why_shortlisted: Fits an airline security-engineering context and an airline integrating with an external identity provider (the identity authority). HE search of 1M templates took 126 ms, and template inversion (AAAI 2026) shows embeddings are sensitive. The EDPB and CBP give concrete design constraints.
     feasibility_note: No GPU needed. Cancelable transforms are trivial on CPU. HE matching over a flight-size gallery should be feasible on CPU with TenSEAL/OpenFHE [INFERRED], but IDFace hardware is not stated.
   - id: A7
     problem_ids: [P13, P14]
@@ -54,15 +54,15 @@ shortlisted_approaches:
     paper_title: Government-anchored matching architecture (CBP TVS, Federal Register 2025-19655) with transactional outbox (microservices.io), IETF Idempotency-Key draft-07 and circuit breaker (Fowler 2014 / Resilience4j)
     paper_url: https://www.federalregister.gov/documents/2025/10/27/2025-19655/collection-of-biometric-data-from-aliens-upon-entry-to-and-departure-from-the-united-states
     year: 2025
-    why_shortlisted: Covers two of the top five problems where Emirates IT has the most ownership, and maps directly to the JD (Java/Spring microservices, REST, Resilience4j). EES 2026 suspensions and the Sep 2025 Collins MUSE outage show degraded modes must be designed and tested.
-    feasibility_note: No GPU needed. Plain services on CPU, and fault injection (GDRFA timeout, camera loss) is demonstrable locally.
+    why_shortlisted: Covers two of the top five problems where airline IT has the most ownership, and maps directly to a typical enterprise stack (Java/Spring microservices, REST, Resilience4j). EES 2026 suspensions and the Sep 2025 Collins MUSE outage show degraded modes must be designed and tested.
+    feasibility_note: No GPU needed. Plain services on CPU, and fault injection (identity-authority timeout, camera loss) is demonstrable locally.
   - id: A8
     problem_ids: [P15]
     name: ML-aware observability and safe matcher rollout (OpenTelemetry metrics and traces, golden signals per gate, score and top-2 margin distributions, manual-fallback rate as FNIR proxy, shadow/canary with template-version tagging)
     paper_title: "The ML Test Score: A Rubric for ML Production Readiness and Technical Debt Reduction" (Breck et al., 2017) with Google SRE four golden signals; optional BCT (Shen et al., CVPR 2020) for upgrades without re-extraction
     paper_url: https://research.google/pubs/the-ml-test-score-a-rubric-for-ml-production-readiness-and-technical-debt-reduction/
     year: 2017
-    why_shortlisted: The JD stresses logging, monitoring hooks, on-call and SLAs. FRTE shows matchers are resubmitted constantly, so upgrade and re-templating is a real operational risk, and it involves GDRFA-held references.
+    why_shortlisted: Production ownership means logging, monitoring hooks, on-call and SLAs. FRTE shows matchers are resubmitted constantly, so upgrade and re-templating is a real operational risk, and it involves authority-held references.
     feasibility_note: No GPU needed. OTel collector with Prometheus/Grafana on CPU. BCT demo would need GPU fine-tuning (optional).
   - id: A9
     problem_ids: [P7]

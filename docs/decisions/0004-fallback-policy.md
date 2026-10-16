@@ -10,4 +10,4 @@
 - Why: a breaker turns a slow dependency into an immediate, visible manual decision so the queue keeps moving
   (degraded modes such as the EES suspensions and the MUSE outage show this must be designed and rehearsed).
 - Consequences: availability of automation depends on the identity provider; whether local-only matching with later
-  reconciliation is allowed during an outage is a policy decision, **not publicly known** (hiring-manager question).
+  reconciliation is allowed during an outage is a policy decision, **not publicly known** (an open question for a real operator).

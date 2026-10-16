@@ -1,4 +1,4 @@
-# Facial Recognition at Emirates Gates: Phase 3 Open-Source Building Blocks (as of 30 Sep 2026)
+# Facial Recognition at Airline Boarding Gates: Phase 3 Open-Source Building Blocks (as of 30 Sep 2026)
 
 **Input:** Phase 2 handoff (shortlist A1–A9, authoritative), Phase 1 handoff (problem context), and both full reports.
 
@@ -15,7 +15,7 @@ Package versions were checked on PyPI and Maven Central. Core blocks were then *
 - **Update to Phase 2 A1 (EdgeFace weight licence).** The Idiap model card licenses the EdgeFace weights under **CC BY-NC-SA 4.0**. UniFace's attribution page lists them as BSD-3-Clause. These conflict, so I follow the authors' card. [V] https://huggingface.co/Idiap/EdgeFace-Base; https://github.com/yakhyo/uniface (docs/license-attribution.md)
 
 ## TL;DR
-- **Fastest credible stack (Python).** Use `insightface` 2.0 (released 9–10 Sep 2026) for SCRFD detection and ArcFace-R50 recognition. It now also ships an optional RGB liveness addon and a REST "InsightFace Server" (0.3.1). All InsightFace pretrained models are **non-commercial research only**, which is fine for a POC but worth saying out loud in the interview. [V] https://github.com/deepinsight/insightface
+- **Fastest credible stack (Python).** Use `insightface` 2.0 (released 9–10 Sep 2026) for SCRFD detection and ArcFace-R50 recognition. It now also ships an optional RGB liveness addon and a REST "InsightFace Server" (0.3.1). All InsightFace pretrained models are **non-commercial research only**, which is fine for a POC but worth stating up front. [V] https://github.com/deepinsight/insightface
 - **License-clean stack that runs identically in Python and Java.** Use the OpenCV Zoo ONNX models: YuNet detection (MIT), SFace recognition (Apache-2.0) and eDifFIQA(T) quality (CC BY 4.0). They run on CPU at 36 / 11 / 9 ms [M], and SFace runs from Java ONNX Runtime at about 15 ms [M]. [V] https://github.com/opencv/opencv_zoo; https://huggingface.co/opencv
 - **Glue libraries are mature in both ecosystems, and I ran both.** Spring Boot 4.1.1 + `resilience4j-spring-boot4` 2.4.0 + Actuator/Prometheus opened the breaker after 3 failures and fell back to `MANUAL_CHECK` [M]. FastAPI + pybreaker + tenacity + Prometheus did the same [M].
 - **Search is not a bottleneck at flight scale.** Exact search over 500 × 512-d templates takes 0.04 ms with FAISS or NumPy, and 100k takes about 14 ms on CPU [M]. pgvector (PostgreSQL License) fits the user's PostgreSQL stack and has a Java client.
@@ -149,7 +149,7 @@ FairCal: no official code repository could be verified (the author's GitHub repo
 | roboflow/trackers (ByteTrack) | **5** | pip, detector-agnostic, IDs stable in the synthetic walk-through [M] | Yes |
 | FAISS / NumPy exact search | **5** | Trivial at flight scale [M] | Yes |
 | pgvector | **4** | Fits the PostgreSQL/Hibernate world; Docker one-liner. [M] `pgvector/pgvector:pg17` (extension 0.8.6): exact top-2 over 500 rows in 5.3 ms | Yes |
-| Resilience4j + Actuator + Micrometer (Boot 4.1.1) | **5** | Built and run end to end [M]; directly matches the JD | Yes |
+| Resilience4j + Actuator + Micrometer (Boot 4.1.1) | **5** | Built and run end to end [M]; directly matches the target stack | Yes |
 | FastAPI + pybreaker + tenacity + Prometheus + structlog | **5** | Built and run end to end [M] | Yes |
 | facenox MiniFAS INT8 | **4** | Drop-in ONNX (Python or Java) | Yes (8.7 ms) [M] |
 | TenSEAL | **3** | Works on Windows, but naive encrypted 1:N is seconds, not milliseconds [M] | Yes (slow) |
@@ -174,7 +174,7 @@ FairCal: no official code repository could be verified (the author's GitHub repo
    - InspireFace models are academic-only. [V]
    - BTPBench code is research-only. [V]
 
-   All of these are acceptable for an interview POC. [I] State it explicitly: production would use licensed SDKs, as Phase 2 found.
+   All of these are acceptable for a personal prototype. [I] State it explicitly: production would use licensed SDKs, as Phase 2 found.
 2. **Training-data provenance is separate from the weights licence.** UniFace warns that WebFace260M (AdaFace, EdgeFace), WIDER FACE (most detectors) and MS-Celeb-1M carry non-commercial dataset terms, even where the weights are released under MIT/BSD. [V yakhyo/uniface docs/license-attribution.md]
 3. **Hidden data restrictions in PAD models.**
    - facenox's weights are Apache-2.0, but it was trained on CelebA-Spoof, which is "available for non-commercial research purposes only". [V]
@@ -215,7 +215,7 @@ FairCal: no official code repository could be verified (the author's GitHub repo
 | Inference maturity | ORT Python, OpenCV 5.0, InsightFace 2.0 (Sep 2026) [V] | Python inference plus a mature Spring stack [V] | ORT Java 1.30.0 on Maven, same release as Python [V]. DJL 0.38.0 active [V]. Prebuilt OpenCV Java lags (openpnp 4.9.0, Dec 2023; JavaCV 4.14.0) [V] |
 | GPU support | `onnxruntime-gpu` 1.30.0 wheels require **CUDA 13** (`nvidia-cuda-runtime~=13.0`, `nvidia-cudnn-cu13`); 1.26.0 is the CUDA 12 line [V wheel metadata]. ORT's install page still says CUDA 12 is the default (**docs conflict**) | GPU stays in Python; the Java side is CPU-only | `onnxruntime_gpu` 1.30.0 exists for Windows/Linux x64 [V]. Which CUDA major it targets is not documented, so the smoke test checks it [I]. OpenCV 5's new DNN engine ignores CUDA targets [M] |
 | 2-day build speed | Fastest: an end-to-end pipeline and gate service ran here in minutes [M]. Matches the user's main stack (Python/FastAPI/PostgreSQL) [V profile] | Medium: two services, a REST/gRPC contract and two builds. Each half was validated separately [M] | Slowest: the Java model glue is custom and the Java/Spring experience is limited (project context) |
-| Fit with the Emirates JD | Weak on Java/Spring, but strong on the ML reasoning the hiring manager may probe [I] | Strong: Spring Boot microservice, REST, Resilience4j, Actuator/Micrometer, JPA/Hibernate outbox, on-call metrics. The ML stays where the ecosystem is. The same split exists in open source (CompreFace) [V] | Strongest on paper, but the riskiest to finish, and it spends time on ML plumbing rather than system design [I] |
+| Fit with the Java/Spring target stack | Weak on Java/Spring, but strong on the ML reasoning a reviewer may probe [I] | Strong: Spring Boot microservice, REST, Resilience4j, Actuator/Micrometer, JPA/Hibernate outbox, on-call metrics. The ML stays where the ecosystem is. The same split exists in open source (CompreFace) [V] | Strongest on paper, but the riskiest to finish, and it spends time on ML plumbing rather than system design [I] |
 | Resilience / observability libraries | pybreaker (async only via Tornado), tenacity, Prometheus, structlog, OTel (FastAPI Beta) [V] | Resilience4j + Actuator on the gate side; minimal Prometheus on the model side | Resilience4j, Actuator, Micrometer, Boot 4 OTel starter, Spring Modulith [V] |
 | Demo / explainability | One process, simplest recording | A clean diagram: gate service, identity-provider stub, model service. Circuit breaker and fallback are easy to show [I] | Single JVM; ML internals hidden in custom code |
 
@@ -368,12 +368,12 @@ building_blocks:
 language_options:
   - option: all Python
     pros: Every model block pip-installs and was run end to end (InsightFace 2.0, UniFace, OpenCV 5, FAISS, trackers, FastAPI + pybreaker + Prometheus). Fastest to build in 2 days and matches the user's daily stack. GPU is straightforward via onnxruntime-gpu.
-    cons: Weak signal for the JD's Java/Spring/Hibernate emphasis. Async circuit breaking is weak (pybreaker needs Tornado). No standard outbox or idempotency library. onnxruntime-gpu 1.30 wheels need CUDA 13 (1.26 for CUDA 12).
+    cons: Does not exercise the Java/Spring/Hibernate target stack. Async circuit breaking is weak (pybreaker needs Tornado). No standard outbox or idempotency library. onnxruntime-gpu 1.30 wheels need CUDA 13 (1.26 for CUDA 12).
   - option: Java + Python
-    pros: Spring Boot 4.1.1 gate service with Resilience4j, Actuator/Micrometer, OTel starter and Spring Modulith outbox (validated) directly mirrors the JD, while the ML stays in Python where models and GPU support are mature. The same split exists in open source (CompreFace). Gives a clear diagram and failure-injection demo.
+    pros: Spring Boot 4.1.1 gate service with Resilience4j, Actuator/Micrometer, OTel starter and Spring Modulith outbox (validated) directly mirrors the target enterprise stack, while the ML stays in Python where models and GPU support are mature. The same split exists in open source (CompreFace). Gives a clear diagram and failure-injection demo.
     cons: Two services, a REST/gRPC contract and two builds within 2 days. The extra network hop needs timeouts and must be explained. CompreFace itself is stale, so it is a pattern only, not reusable code.
   - option: all Java
-    pros: Strongest literal JD fit. ONNX Runtime Java 1.30.0 (CPU and GPU artifacts on Maven) runs the same ONNX models (SFace 14.7 ms, R50 146 ms CPU measured). OpenCV Java has native YuNet/SFace. Single JVM to operate.
+    pros: Strongest literal fit with the Java target stack. ONNX Runtime Java 1.30.0 (CPU and GPU artifacts on Maven) runs the same ONNX models (SFace 14.7 ms, R50 146 ms CPU measured). OpenCV Java has native YuNet/SFace. Single JVM to operate.
     cons: SCRFD decoding, face alignment, ByteTrack and PAD cropping must be hand-ported. Prebuilt OpenCV Java lags (openpnp 4.9.0 Dec 2023; JavaCV 4.14.0). The CUDA version of onnxruntime_gpu for Java is undocumented. Highest risk of not finishing, and time goes to ML plumbing rather than system design.
 rejected:
   - repo: https://github.com/mikel-brostrom/boxmot
