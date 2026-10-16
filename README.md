@@ -1,6 +1,6 @@
 # Consent-first flight-gallery boarding gate (personal project)
 
-DEMO_VIDEO_URL
+https://github.com/user-attachments/assets/32325e61-052e-4b7e-8fb0-acc2fd38cd00
 
 *Demo, 1 min 44 s, no sound. The X-ray console boards flight DEMO01: synthetic passengers board, while a poor
 capture, a stranger, two faces and a tiny face all go to a person instead of guessing. Then the author, on a live
