@@ -253,7 +253,8 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\pip install "onnxruntime-gpu[cuda,cudnn]==1.30.0"   # CUDA 13 driver; CUDA 12: ==1.26.0
 # no NVIDIA GPU instead:  .\.venv\Scripts\pip install onnxruntime==1.30.0   (and use DEVICE=cpu below)
 
-# Face models (InsightFace buffalo_l: non-commercial research only; YuNet + SFace: MIT / Apache-2.0)
+# Face models: InsightFace buffalo_l (~330 MB, non-commercial research only) goes to ~/.insightface/models/;
+# YuNet + SFace (~40 MB, MIT / Apache-2.0) go to model-service/models/
 cd model-service; ..\.venv\Scripts\python download_models.py; cd ..
 
 # Synthetic passengers: a 50-identity DigiFace-1M subset via HTTP range requests (research licence, stays local)
@@ -268,7 +269,8 @@ Set-Content -Encoding ascii data\local-secrets.properties "gate.kek.password=<pa
 cd gate-console; npm install; cd ..
 ```
 
-Everything in `data/` is gitignored: keys, synthetic faces and your photos never leave your machine.
+Everything in `data/` is gitignored: keys, synthetic faces and your photos never leave your machine. The first
+setup downloads about 2.5 GB (most of it the CUDA libraries inside `.venv`; far less for CPU only).
 
 ### 10.3 Add yourself as the volunteer
 
